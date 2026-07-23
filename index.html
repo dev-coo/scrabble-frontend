@@ -1,0 +1,46 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>스크래블 프론트엔드</title>
+  <style>
+    body { font-family: -apple-system, "Apple SD Gothic Neo", sans-serif; min-height: 100vh; margin: 0;
+           display: flex; align-items: center; justify-content: center; background: #f3f4f6; }
+    .card { text-align: center; padding: 40px 52px; background: #fff; border-radius: 16px;
+            box-shadow: 0 6px 24px rgba(0,0,0,.08); max-width: 480px; }
+    h1 { font-size: 1.7rem; margin: 0 0 6px; color: #4f46e5; }
+    .sub { color: #6b7280; margin: 0 0 22px; }
+    .label { font-size: .8rem; color: #9ca3af; letter-spacing: .04em; }
+    #result { margin-top: 8px; padding: 16px; border-radius: 10px; background: #f9fafb;
+              border: 1px solid #e5e7eb; font-size: 1.05rem; }
+    .ok { color: #059669; font-weight: 700; }
+    .err { color: #dc2626; font-weight: 700; }
+  </style>
+</head>
+<body>
+  <div class="card">
+    <h1>기본용 프론트엔드 화면입니다</h1>
+    <p class="sub">이 화면(프론트엔드)이 열리면서 백엔드를 한 번 호출합니다.</p>
+    <p class="label">백엔드 응답 ↓</p>
+    <div id="result">호출 중…</div>
+  </div>
+
+  <script>
+    // 프론트엔드는 백엔드에 API로 "요청"해서 값을 받아옵니다.
+    // 백엔드 주소가 바뀌면 이 한 줄만 고치면 됩니다.
+    const API_BASE = "http://100.115.173.118:11000";
+    const box = document.getElementById("result");
+
+    fetch(API_BASE + "/api/hello")
+      .then((res) => res.json())
+      .then((data) => {
+        box.innerHTML = '<span class="ok">✅ ' + data.message + '</span>';
+      })
+      .catch((e) => {
+        box.innerHTML = '<span class="err">❌ 백엔드 호출 실패</span><br><small>'
+          + e.message + '</small>';
+      });
+  </script>
+</body>
+</html>
