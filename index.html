@@ -16,6 +16,18 @@
               border: 1px solid #e5e7eb; font-size: 1.05rem; }
     .ok { color: #059669; font-weight: 700; }
     .err { color: #dc2626; font-weight: 700; }
+
+    /* 닉네임 저장 폼 */
+    hr { border: 0; border-top: 1px solid #e5e7eb; margin: 26px 0 20px; }
+    .form-row { display: flex; gap: 8px; }
+    #nickname { flex: 1; padding: 11px 13px; font-size: 1rem; border: 1px solid #d1d5db;
+                border-radius: 10px; font-family: inherit; }
+    #nickname:focus { outline: 2px solid #a5b4fc; outline-offset: 1px; border-color: #6366f1; }
+    #saveBtn { padding: 11px 20px; font-size: 1rem; font-family: inherit; font-weight: 600;
+               color: #fff; background: #4f46e5; border: 0; border-radius: 10px; cursor: pointer; }
+    #saveBtn:hover:enabled { background: #4338ca; }
+    #saveBtn:disabled { background: #c7d2fe; cursor: default; }
+    #saveResult { margin-top: 12px; min-height: 1.3em; font-size: .95rem; text-align: left; }
   </style>
 </head>
 <body>
@@ -24,6 +36,15 @@
     <p class="sub">이 화면(프론트엔드)이 열리면서 백엔드를 한 번 호출합니다.</p>
     <p class="label">백엔드 응답 ↓</p>
     <div id="result">호출 중…</div>
+
+    <hr />
+
+    <p class="label">닉네임 저장하기</p>
+    <div class="form-row">
+      <input id="nickname" type="text" placeholder="닉네임을 입력하세요" maxlength="20" />
+      <button id="saveBtn" type="button">저장</button>
+    </div>
+    <div id="saveResult"></div>
   </div>
 
   <script>
@@ -41,6 +62,60 @@
         box.innerHTML = '<span class="err">❌ 백엔드 호출 실패</span><br><small>'
           + e.message + '</small>';
       });
+
+    // ── 닉네임 저장 (POST /api/players) ──────────────────────────
+    // 위의 hello 호출은 "값을 받아오기(GET)"였고,
+    // 여기는 "값을 보내서 저장하기(POST)"입니다.
+    const input = document.getElementById("nickname");
+    const saveBtn = document.getElementById("saveBtn");
+    const saveBox = document.getElementById("saveResult");
+
+    function savePlayer() {
+      const nickname = input.value.trim();
+
+      // 빈 값은 보내기 전에 화면에서 먼저 걸러냅니다(프론트엔드의 역할).
+      if (nickname === "") {
+        saveBox.innerHTML = '<span class="err">닉네임을 입력해 주세요.</span>';
+        input.focus();
+        return;
+      }
+
+      saveBtn.disabled = true;
+      saveBox.textContent = "저장 중…";
+
+      fetch(API_BASE + "/api/players", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        // 백엔드와 약속한 모양: { "nickname": "수진" }
+        body: JSON.stringify({ nickname: nickname }),
+      })
+        .then((res) => {
+          // 201 = "성공 + 새 데이터가 만들어짐"
+          if (res.status === 201) return res.json();
+          // 422 = 보낸 값의 형식이 잘못됨
+          if (res.status === 422) throw new Error("입력한 값의 형식이 올바르지 않습니다.");
+          throw new Error("서버 오류 (상태 코드 " + res.status + ")");
+        })
+        .then((player) => {
+          // 백엔드가 돌려준 모양: { id, nickname, created_at }
+          saveBox.innerHTML = '<span class="ok">✅ 저장 완료</span><br>'
+            + '<small>id: ' + player.id + ' / 닉네임: ' + player.nickname + '</small>';
+          input.value = "";
+        })
+        .catch((e) => {
+          saveBox.innerHTML = '<span class="err">❌ 저장 실패</span><br><small>'
+            + e.message + '</small>';
+        })
+        .finally(() => {
+          saveBtn.disabled = false;
+        });
+    }
+
+    saveBtn.addEventListener("click", savePlayer);
+    // 입력칸에서 엔터를 쳐도 저장되게 합니다.
+    input.addEventListener("keydown", (e) => {
+      if (e.key === "Enter") savePlayer();
+    });
   </script>
 </body>
 </html>
