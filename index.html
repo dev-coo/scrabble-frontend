@@ -17,17 +17,29 @@
     .ok { color: #059669; font-weight: 700; }
     .err { color: #dc2626; font-weight: 700; }
 
-    /* 닉네임 저장 폼 */
+    /* 닉네임 저장 폼 / 조회 폼 */
     hr { border: 0; border-top: 1px solid #e5e7eb; margin: 26px 0 20px; }
     .form-row { display: flex; gap: 8px; }
-    #nickname { flex: 1; padding: 11px 13px; font-size: 1rem; border: 1px solid #d1d5db;
-                border-radius: 10px; font-family: inherit; }
-    #nickname:focus { outline: 2px solid #a5b4fc; outline-offset: 1px; border-color: #6366f1; }
-    #saveBtn { padding: 11px 20px; font-size: 1rem; font-family: inherit; font-weight: 600;
-               color: #fff; background: #4f46e5; border: 0; border-radius: 10px; cursor: pointer; }
-    #saveBtn:hover:enabled { background: #4338ca; }
-    #saveBtn:disabled { background: #c7d2fe; cursor: default; }
-    #saveResult { margin-top: 12px; min-height: 1.3em; font-size: .95rem; text-align: left; }
+    .form-row input { flex: 1; padding: 11px 13px; font-size: 1rem; border: 1px solid #d1d5db;
+                      border-radius: 10px; font-family: inherit; }
+    .form-row input:focus { outline: 2px solid #a5b4fc; outline-offset: 1px; border-color: #6366f1; }
+    .form-row button { padding: 11px 20px; font-size: 1rem; font-family: inherit; font-weight: 600;
+                       color: #fff; background: #4f46e5; border: 0; border-radius: 10px; cursor: pointer; }
+    .form-row button:hover:enabled { background: #4338ca; }
+    .form-row button:disabled { background: #c7d2fe; cursor: default; }
+    #saveResult, #findResult { margin-top: 12px; min-height: 1.3em; font-size: .95rem; text-align: left; }
+    .found { padding: 12px 14px; border-radius: 10px; background: #f9fafb; border: 1px solid #e5e7eb; }
+    .found dl { margin: 0; display: grid; grid-template-columns: auto 1fr; gap: 4px 12px; }
+    .found dt { color: #9ca3af; font-size: .85rem; }
+    .found dd { margin: 0; font-size: .95rem; }
+    .found .edit-label { margin: 16px 0 6px; }
+    .found .form-row input { background: #fff; }
+    #editResult { margin-top: 10px; min-height: 1.3em; font-size: .95rem; }
+    #deleteBtn { margin-top: 4px; padding: 9px 16px; font-size: .9rem; font-family: inherit;
+                 font-weight: 600; color: #dc2626; background: #fff; border: 1px solid #fca5a5;
+                 border-radius: 9px; cursor: pointer; }
+    #deleteBtn:hover:enabled { color: #fff; background: #dc2626; border-color: #dc2626; }
+    #deleteBtn:disabled { color: #fca5a5; border-color: #fee2e2; cursor: default; }
   </style>
 </head>
 <body>
@@ -45,6 +57,15 @@
       <button id="saveBtn" type="button">저장</button>
     </div>
     <div id="saveResult"></div>
+
+    <hr />
+
+    <p class="label">내 닉네임 조회하기</p>
+    <div class="form-row">
+      <input id="findNickname" type="text" placeholder="저장한 닉네임을 입력하세요" maxlength="20" />
+      <button id="findBtn" type="button">조회</button>
+    </div>
+    <div id="findResult"></div>
   </div>
 
   <script>
@@ -63,9 +84,9 @@
           + e.message + '</small>';
       });
 
-    // ── 닉네임 저장 (POST /api/players) ──────────────────────────
+    // ── 닉네임 저장 (GET /api/players 로 중복 확인 → POST /api/players) ──
     // 위의 hello 호출은 "값을 받아오기(GET)"였고,
-    // 여기는 "값을 보내서 저장하기(POST)"입니다.
+    // 여기는 "먼저 물어보고(GET), 괜찮으면 보내서 저장(POST)"하는 두 단계입니다.
     const input = document.getElementById("nickname");
     const saveBtn = document.getElementById("saveBtn");
     const saveBox = document.getElementById("saveResult");
@@ -81,9 +102,39 @@
       }
 
       saveBtn.disabled = true;
-      saveBox.textContent = "저장 중…";
+      saveBox.textContent = "확인 중…";
 
-      fetch(API_BASE + "/api/players", {
+      // 1단계: 이미 저장된 닉네임 목록을 받아옵니다.
+      fetch(API_BASE + "/api/players")
+        .then((res) => {
+          if (!res.ok) throw new Error("서버 오류 (상태 코드 " + res.status + ")");
+          return res.json();
+        })
+        .then((players) => {
+          // 목록 안에 같은 닉네임이 있는지 확인합니다.
+          const isDuplicate = players.some((p) => p.nickname === nickname);
+          if (isDuplicate) {
+            // 중복이면 저장(POST)을 아예 보내지 않고 여기서 멈춥니다.
+            saveBox.innerHTML = '<span class="err">이미 사용 중인 닉네임입니다.</span>';
+            input.focus();
+            input.select();
+            return null;
+          }
+          // 2단계: 중복이 아니면 저장을 요청합니다.
+          saveBox.textContent = "저장 중…";
+          return savePlayerRequest(nickname);
+        })
+        .catch((e) => {
+          saveBox.innerHTML = '<span class="err">❌ 저장 실패</span><br><small>'
+            + e.message + '</small>';
+        })
+        .finally(() => {
+          saveBtn.disabled = false;
+        });
+    }
+
+    function savePlayerRequest(nickname) {
+      return fetch(API_BASE + "/api/players", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         // 백엔드와 약속한 모양: { "nickname": "수진" }
@@ -101,13 +152,6 @@
           saveBox.innerHTML = '<span class="ok">✅ 저장 완료</span><br>'
             + '<small>id: ' + player.id + ' / 닉네임: ' + player.nickname + '</small>';
           input.value = "";
-        })
-        .catch((e) => {
-          saveBox.innerHTML = '<span class="err">❌ 저장 실패</span><br><small>'
-            + e.message + '</small>';
-        })
-        .finally(() => {
-          saveBtn.disabled = false;
         });
     }
 
@@ -115,6 +159,184 @@
     // 입력칸에서 엔터를 쳐도 저장되게 합니다.
     input.addEventListener("keydown", (e) => {
       if (e.key === "Enter") savePlayer();
+    });
+
+    // ── 닉네임 조회 (GET /api/players) ───────────────────────────
+    // 백엔드에는 "닉네임으로 한 명만 찾아주는 API"가 아직 없습니다.
+    // 그래서 전체 목록을 받아온 뒤, 찾는 일은 프론트엔드가 합니다.
+    const findInput = document.getElementById("findNickname");
+    const findBtn = document.getElementById("findBtn");
+    const findBox = document.getElementById("findResult");
+
+    function findPlayer() {
+      const nickname = findInput.value.trim();
+
+      if (nickname === "") {
+        findBox.innerHTML = '<span class="err">조회할 닉네임을 입력해 주세요.</span>';
+        findInput.focus();
+        return;
+      }
+
+      findBtn.disabled = true;
+      findBox.textContent = "조회 중…";
+
+      fetch(API_BASE + "/api/players")
+        .then((res) => {
+          if (!res.ok) throw new Error("서버 오류 (상태 코드 " + res.status + ")");
+          return res.json();
+        })
+        .then((players) => {
+          // find = 조건에 맞는 첫 번째 하나를 꺼냅니다. 없으면 undefined.
+          const player = players.find((p) => p.nickname === nickname);
+
+          if (!player) {
+            findBox.innerHTML = '<span class="err">그런 닉네임은 저장되어 있지 않습니다.</span>';
+            return;
+          }
+
+          showPlayer(player);
+        })
+        .catch((e) => {
+          findBox.innerHTML = '<span class="err">❌ 조회 실패</span><br><small>'
+            + e.message + '</small>';
+        })
+        .finally(() => {
+          findBtn.disabled = false;
+        });
+    }
+
+    // 조회된 한 명을 카드로 그립니다. 카드 안에 수정용 입력칸도 같이 넣습니다.
+    // 백엔드가 돌려준 모양: { id, nickname, created_at }
+    function showPlayer(player) {
+      findBox.innerHTML =
+        '<div class="found">'
+        + '<dl>'
+        + '<dt>id</dt><dd>' + player.id + '</dd>'
+        + '<dt>닉네임</dt><dd>' + escapeHtml(player.nickname) + '</dd>'
+        + '<dt>만든 날짜</dt><dd>' + formatDate(player.created_at) + '</dd>'
+        + '</dl>'
+        + '<p class="label edit-label">닉네임 수정하기</p>'
+        + '<div class="form-row">'
+        + '<input id="editNickname" type="text" maxlength="20" />'
+        + '<button id="editBtn" type="button">수정</button>'
+        + '</div>'
+        + '<div id="editResult"></div>'
+        + '<button id="deleteBtn" type="button" class="danger">이 플레이어 삭제</button>'
+        + '</div>';
+
+      const editInput = document.getElementById("editNickname");
+      const editBtn = document.getElementById("editBtn");
+      const editBox = document.getElementById("editResult");
+      const deleteBtn = document.getElementById("deleteBtn");
+
+      // 입력칸에는 지금 닉네임을 미리 채워둡니다.
+      // (value="…" 로 넣지 않고 JS로 넣는 이유: 닉네임에 따옴표가 들어가도 안전합니다)
+      editInput.value = player.nickname;
+
+      // ── 닉네임 수정 (PUT /api/players/{id}) ────────────────────
+      // 저장(POST)은 "새로 만들기", 수정(PUT)은 "이미 있는 것을 바꾸기"입니다.
+      // 그래서 주소 뒤에 "누구를" 바꿀지 id 를 붙입니다.
+      function updatePlayer() {
+        const newNickname = editInput.value.trim();
+
+        if (newNickname === "") {
+          editBox.innerHTML = '<span class="err">닉네임을 입력해 주세요.</span>';
+          editInput.focus();
+          return;
+        }
+        if (newNickname === player.nickname) {
+          editBox.innerHTML = '<span class="err">닉네임이 지금과 같습니다.</span>';
+          return;
+        }
+
+        editBtn.disabled = true;
+        editBox.textContent = "수정 중…";
+
+        fetch(API_BASE + "/api/players/" + player.id, {
+          method: "PUT",
+          headers: { "Content-Type": "application/json" },
+          // 백엔드와 약속한 모양: { "nickname": "새이름" }
+          body: JSON.stringify({ nickname: newNickname }),
+        })
+          .then((res) => {
+            if (res.status === 200) return res.json();
+            // 404 = 그 id 를 가진 사람이 백엔드에 없음 (다른 곳에서 이미 지웠을 때)
+            if (res.status === 404) throw new Error("이미 삭제된 플레이어입니다. 다시 조회해 주세요.");
+            if (res.status === 422) throw new Error("입력한 값의 형식이 올바르지 않습니다.");
+            throw new Error("서버 오류 (상태 코드 " + res.status + ")");
+          })
+          .then((updated) => {
+            // 바뀐 값으로 카드를 다시 그립니다.
+            showPlayer(updated);
+            document.getElementById("editResult").innerHTML =
+              '<span class="ok">✅ 수정 완료</span>';
+            // 조회칸도 새 닉네임으로 맞춰둡니다. (다시 조회해도 찾을 수 있게)
+            findInput.value = updated.nickname;
+          })
+          .catch((e) => {
+            editBox.innerHTML = '<span class="err">❌ 수정 실패</span><br><small>'
+              + e.message + '</small>';
+            editBtn.disabled = false;
+          });
+      }
+
+      // ── 플레이어 삭제 (DELETE /api/players/{id}) ───────────────
+      // PUT 과 주소는 같고, 보낼 값(body)이 없다는 점만 다릅니다.
+      // "누구를" 지울지는 주소의 id 로 이미 다 말했으니까요.
+      function deletePlayer() {
+        // 되돌릴 수 없는 일이라 한 번 더 물어봅니다(프론트엔드의 역할).
+        if (!window.confirm('"' + player.nickname + '" 님을 삭제할까요? 되돌릴 수 없습니다.')) {
+          return;
+        }
+
+        deleteBtn.disabled = true;
+        editBtn.disabled = true;
+        editBox.textContent = "삭제 중…";
+
+        fetch(API_BASE + "/api/players/" + player.id, { method: "DELETE" })
+          .then((res) => {
+            if (res.status === 200) return res.json();
+            if (res.status === 404) throw new Error("이미 삭제된 플레이어입니다.");
+            throw new Error("서버 오류 (상태 코드 " + res.status + ")");
+          })
+          .then((deleted) => {
+            // 백엔드가 "지워진 사람"의 정보를 돌려주므로 이름을 띄울 수 있습니다.
+            // 카드는 통째로 치웁니다 — 더 이상 없는 사람이니까요.
+            findBox.innerHTML = '<span class="ok">🗑 삭제 완료</span><br><small>'
+              + escapeHtml(deleted.nickname) + ' (id: ' + deleted.id + ')</small>';
+            findInput.value = "";
+          })
+          .catch((e) => {
+            editBox.innerHTML = '<span class="err">❌ 삭제 실패</span><br><small>'
+              + e.message + '</small>';
+            deleteBtn.disabled = false;
+            editBtn.disabled = false;
+          });
+      }
+
+      editBtn.addEventListener("click", updatePlayer);
+      editInput.addEventListener("keydown", (e) => {
+        if (e.key === "Enter") updatePlayer();
+      });
+      deleteBtn.addEventListener("click", deletePlayer);
+    }
+
+    // 닉네임에 <, > 같은 글자가 들어 있어도 화면이 깨지지 않게 바꿔줍니다.
+    function escapeHtml(text) {
+      const div = document.createElement("div");
+      div.textContent = text;
+      return div.innerHTML;
+    }
+
+    // 백엔드가 준 "2026-07-29T13:05:21" 을 사람이 읽기 좋게 바꿉니다.
+    function formatDate(value) {
+      const d = new Date(value);
+      return isNaN(d) ? value : d.toLocaleString("ko-KR");
+    }
+
+    findBtn.addEventListener("click", findPlayer);
+    findInput.addEventListener("keydown", (e) => {
+      if (e.key === "Enter") findPlayer();
     });
   </script>
 </body>
