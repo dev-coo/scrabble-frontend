@@ -1,0 +1,50 @@
+/* ─────────────────────────────────────────────────────────────
+   스크래블 프론트엔드 — 화면 스타일(CSS)
+
+   HTML = 화면의 "뼈대", CSS = 화면의 "겉모습", JS = 화면의 "동작".
+   디자인만 고칠 때는 이 파일만 열면 되고, index.html 의 백엔드
+   호출 코드는 건드리지 않아도 됩니다.
+   ───────────────────────────────────────────────────────────── */
+
+/* ── 기본 레이아웃 ─────────────────────────────────────────── */
+body { font-family: -apple-system, "Apple SD Gothic Neo", sans-serif; min-height: 100vh; margin: 0;
+       display: flex; align-items: center; justify-content: center; background: #f3f4f6; }
+.card { text-align: center; padding: 40px 52px; background: #fff; border-radius: 16px;
+        box-shadow: 0 6px 24px rgba(0,0,0,.08); max-width: 480px; }
+h1 { font-size: 1.7rem; margin: 0 0 6px; color: #4f46e5; }
+.sub { color: #6b7280; margin: 0 0 22px; }
+.label { font-size: .8rem; color: #9ca3af; letter-spacing: .04em; }
+hr { border: 0; border-top: 1px solid #e5e7eb; margin: 26px 0 20px; }
+
+/* ── 백엔드 응답 박스 / 성공·실패 글씨 ───────────────────────── */
+#result { margin-top: 8px; padding: 16px; border-radius: 10px; background: #f9fafb;
+          border: 1px solid #e5e7eb; font-size: 1.05rem; }
+.ok { color: #059669; font-weight: 700; }
+.err { color: #dc2626; font-weight: 700; }
+
+/* ── 입력 폼 (닉네임 저장 / 조회 / 수정 공용) ────────────────── */
+.form-row { display: flex; gap: 8px; }
+.form-row input { flex: 1; padding: 11px 13px; font-size: 1rem; border: 1px solid #d1d5db;
+                  border-radius: 10px; font-family: inherit; }
+.form-row input:focus { outline: 2px solid #a5b4fc; outline-offset: 1px; border-color: #6366f1; }
+.form-row button { padding: 11px 20px; font-size: 1rem; font-family: inherit; font-weight: 600;
+                   color: #fff; background: #4f46e5; border: 0; border-radius: 10px; cursor: pointer; }
+.form-row button:hover:enabled { background: #4338ca; }
+.form-row button:disabled { background: #c7d2fe; cursor: default; }
+#saveResult, #findResult { margin-top: 12px; min-height: 1.3em; font-size: .95rem; text-align: left; }
+
+/* ── 조회 결과 카드 (id / 닉네임 / 만든 날짜 + 수정·삭제) ────── */
+.found { padding: 12px 14px; border-radius: 10px; background: #f9fafb; border: 1px solid #e5e7eb; }
+.found dl { margin: 0; display: grid; grid-template-columns: auto 1fr; gap: 4px 12px; }
+.found dt { color: #9ca3af; font-size: .85rem; }
+.found dd { margin: 0; font-size: .95rem; }
+.found .edit-label { margin: 16px 0 6px; }
+.found .form-row input { background: #fff; }
+#editResult { margin-top: 10px; min-height: 1.3em; font-size: .95rem; }
+
+/* 삭제는 되돌릴 수 없는 동작이라, 실수로 누르지 않게 다른 색을 씁니다. */
+#deleteBtn { margin-top: 4px; padding: 9px 16px; font-size: .9rem; font-family: inherit;
+             font-weight: 600; color: #dc2626; background: #fff; border: 1px solid #fca5a5;
+             border-radius: 9px; cursor: pointer; }
+#deleteBtn:hover:enabled { color: #fff; background: #dc2626; border-color: #dc2626; }
+#deleteBtn:disabled { color: #fca5a5; border-color: #fee2e2; cursor: default; }
