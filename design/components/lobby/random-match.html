@@ -1,0 +1,493 @@
+<!-- @dsCard group="대기실 (Lobby)" viewport="1280x1850" name="랜덤 매칭" subtitle="상태 6종 · 눌러보기 · 규칙" -->
+<!--
+  대기실 ④ — 랜덤모드 · 매칭 시작 / 취소
+  화면(모양)만 담은 파일입니다. 서버를 부르거나 데이터를 저장하지 않습니다.
+  앞의 ①②③과 달리 입력칸이 없습니다. 사용자가 하는 일은 "누르고 기다리기" 뿐입니다.
+-->
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>랜덤 매칭 — 스크래블 대기실</title>
+<link rel="stylesheet" href="../../styles.css" />
+<style>
+*{box-sizing:border-box}
+body{margin:0;padding:0;background:var(--paper);color:var(--ink);font-family:var(--font-text);line-height:1.6;-webkit-font-smoothing:antialiased}
+.board{min-height:100vh;padding:40px 28px 72px}
+.wrap{max-width:1000px;margin:0 auto}
+
+/* ── 문서 머리 ─────────────────────────────────────────── */
+.doc-head{padding-bottom:34px;border-bottom:2px solid var(--rule)}
+.tiles{display:flex;flex-wrap:wrap;gap:0;margin:0 0 22px}
+.tile{width:var(--cell);height:var(--cell);display:grid;place-items:center;background:var(--theme);border:1px solid var(--rule);margin:-1px 0 0 -1px;font-family:var(--font-display);font-weight:700;font-size:20px;color:var(--ink)}
+.tile.is-gap{background:transparent;border-color:transparent}
+.crumb{margin:0 0 10px;font-family:var(--font-mono);font-size:11px;letter-spacing:var(--track-caps);text-transform:uppercase;color:var(--ink-soft)}
+.doc-head h1{margin:0 0 12px;font-family:var(--font-display);font-weight:700;font-size:34px;letter-spacing:-.01em}
+.doc-head p{margin:0;max-width:58ch;color:var(--ink-soft);font-size:15px;text-wrap:pretty}
+
+/* ── 구역 ──────────────────────────────────────────────── */
+.section{margin-top:56px}
+.section>h2{display:inline-block;margin:0 0 10px;padding:5px 12px;background:var(--theme);border:1px solid var(--rule);font-family:var(--font-display);font-size:12px;font-weight:700;letter-spacing:var(--track-caps);text-transform:uppercase}
+.section>.lede{margin:0 0 26px;max-width:62ch;font-size:15px;color:var(--ink-soft);text-wrap:pretty}
+
+/* ── 상태 카드 격자 ────────────────────────────────────── */
+.grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(360px,1fr));gap:0}
+.case{margin:-1px 0 0 -1px;padding:22px;background:var(--paper-2);border:1px solid var(--rule)}
+.case.is-extra{background:repeating-linear-gradient(-45deg,var(--paper-2),var(--paper-2) 9px,var(--paper) 9px,var(--paper) 18px)}
+.case-name{display:flex;align-items:center;gap:9px;margin:0 0 20px;font-family:var(--font-mono);font-size:11px;letter-spacing:var(--track-caps);text-transform:uppercase;color:var(--ink-soft)}
+.mark{width:12px;height:12px;flex:none;border:1px solid var(--rule);background:transparent}
+.mark.is-ok{background:var(--ok)}
+.mark.is-bad{background:var(--bad)}
+.mark.is-wait{background:var(--theme)}
+.case-note{margin:18px 0 0;padding-top:15px;border-top:1px solid var(--grid);font-size:13px;color:var(--ink-soft);text-wrap:pretty}
+.tag{display:inline-block;margin-left:auto;padding:2px 7px;background:var(--theme-tint);border:1px solid var(--rule);font-size:10px;letter-spacing:var(--track-caps)}
+
+/* ── ⬇ 여기부터가 실제 컴포넌트입니다 ─────────────────── */
+.field-label{display:block;margin-bottom:9px;font-family:var(--font-mono);font-size:11px;letter-spacing:var(--track-caps);text-transform:uppercase;color:var(--ink)}
+
+/* 두 사람 자리 — 나 / 상대. 이 화면의 중심입니다. */
+.versus{display:flex;align-items:stretch;margin:0 0 4px}
+.player{flex:1;min-width:0;margin-left:-1px;padding:16px 14px;background:#fff;border:1.5px solid var(--rule);text-align:center}
+.player:first-child{margin-left:0}
+.player.is-empty{background:transparent;border-style:dashed;border-color:var(--grid)}
+.player.is-found{background:var(--ok-tint)}
+.player-tile{width:44px;height:52px;margin:0 auto 10px;display:grid;place-items:center;
+  background:var(--theme);border:1.5px solid var(--rule);
+  font-family:var(--font-display);font-size:22px;font-weight:700;color:var(--ink)}
+.player.is-empty .player-tile{background:transparent;border-style:dashed;border-color:var(--grid);color:var(--ink-faint)}
+.player.is-found .player-tile{background:var(--ok);color:#fff;border-color:var(--rule)}
+/* 찾는 중 — 상대 타일이 뒤집히듯 깜빡입니다. */
+.player.is-hunting .player-tile{animation:flip 1s steps(2,end) infinite}
+.player-name{font-size:14px;font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.player.is-empty .player-name{color:var(--ink-faint);font-weight:400}
+.player-role{margin-top:2px;font-family:var(--font-mono);font-size:10px;letter-spacing:var(--track-caps);text-transform:uppercase;color:var(--ink-faint)}
+
+/* 가운데 VS 표시 */
+.vs{flex:none;width:40px;margin-left:-1px;display:grid;place-items:center;
+  background:var(--paper);border:1.5px solid var(--rule);
+  font-family:var(--font-display);font-size:12px;font-weight:700;letter-spacing:.06em;color:var(--ink-soft)}
+
+/* 경과 시간 — 숫자가 바뀔 때 폭이 흔들리지 않게 고정폭 숫자를 씁니다. */
+.elapsed{margin:16px 0 0;text-align:center;
+  font-family:var(--font-mono);font-size:26px;font-variant-numeric:tabular-nums;letter-spacing:.04em;color:var(--ink)}
+
+.btn-match{width:100%;margin-top:16px;height:58px;padding:0 22px;
+  font-family:var(--font-display);font-size:13px;font-weight:700;letter-spacing:var(--track-caps);text-transform:uppercase;
+  color:var(--ink);background:var(--theme);border:1.5px solid var(--rule);border-radius:0;cursor:pointer;transition:background .15s}
+.btn-match:hover:not(:disabled){background:var(--theme-deep)}
+.btn-match:active:not(:disabled){background:var(--theme-deep);box-shadow:inset 0 2px 0 rgba(0,0,0,.14)}
+.btn-match:disabled{cursor:not-allowed;background:transparent;color:var(--ink-faint);border-color:var(--grid)}
+/* 취소는 되돌리는 동작이라 색을 빼고 테두리만 남깁니다. */
+.btn-match.is-stop{background:transparent;color:var(--ink)}
+.btn-match.is-stop:hover:not(:disabled){background:var(--bad-tint);border-color:var(--bad);color:var(--bad)}
+
+/* 지금 몇 명이 기다리는지 */
+.queue{display:flex;align-items:center;justify-content:center;gap:7px;margin:14px 0 0;
+  padding-top:14px;border-top:1px solid var(--grid);font-size:13px;color:var(--ink-soft)}
+.queue b{color:var(--ink);font-variant-numeric:tabular-nums}
+.queue-dot{width:8px;height:8px;flex:none;background:var(--ok);border:1px solid var(--rule)}
+.queue.is-lonely .queue-dot{background:transparent;border-color:var(--grid)}
+
+.hint{display:flex;align-items:center;justify-content:center;gap:7px;margin:12px 0 0;min-height:22px;font-size:13.5px;color:var(--ink-soft);text-align:center}
+.hint.is-ok{color:var(--ok)}
+.hint.is-bad{color:var(--bad)}
+.hint.is-wait{color:var(--ink)}
+.hint-icon{flex:none;width:18px;height:18px;display:grid;place-items:center;font-family:var(--font-display);font-size:11px;font-weight:700;color:#fff}
+.is-ok>.hint-icon{background:var(--ok)}
+.is-bad>.hint-icon{background:var(--bad)}
+.waiting{flex:none;width:14px;height:14px;background:var(--theme);border:1px solid var(--rule);animation:flip 1s steps(2,end) infinite}
+@keyframes flip{50%{background:transparent}}
+@media (prefers-reduced-motion:reduce){.waiting,.player.is-hunting .player-tile{animation-duration:3s}}
+/* ── ⬆ 컴포넌트 끝 ────────────────────────────────────── */
+
+/* ── 눌러보는 미리보기 ─────────────────────────────────── */
+.play{padding:30px;background:var(--paper-2);border:1.5px solid var(--rule)}
+.play-stage{max-width:380px;margin:0 auto}
+.switch{display:flex;flex-wrap:wrap;gap:0;margin-top:28px;padding-top:22px;border-top:1px solid var(--grid)}
+.switch-label{width:100%;margin:0 0 10px;font-family:var(--font-mono);font-size:11px;letter-spacing:var(--track-caps);text-transform:uppercase;color:var(--ink-soft)}
+.chip{margin:0 0 0 -1px;padding:9px 14px;font-family:var(--font-display);font-size:11px;font-weight:700;letter-spacing:var(--track-caps);text-transform:uppercase;color:var(--ink);background:transparent;border:1px solid var(--rule);border-radius:0;cursor:pointer;transition:background .15s}
+.chip:hover{background:var(--theme-tint)}
+.chip[aria-pressed="true"]{background:var(--theme)}
+
+/* ── 규칙 표 ───────────────────────────────────────────── */
+table{width:100%;border-collapse:collapse;font-size:14px;background:var(--paper-2)}
+th,td{text-align:left;padding:13px 15px;border:1px solid var(--grid);vertical-align:top}
+th{background:var(--theme-tint);border-color:var(--rule);font-family:var(--font-mono);font-size:11px;letter-spacing:var(--track-caps);text-transform:uppercase;font-weight:400;color:var(--ink)}
+td:first-child{white-space:nowrap;font-weight:600}
+.table-scroll{overflow-x:auto;border:1.5px solid var(--rule)}
+code{padding:1px 6px;background:var(--theme-tint);font-family:var(--font-mono);font-size:.88em}
+.colophon{margin:48px 0 0;text-align:center;font-family:var(--font-mono);font-size:10px;letter-spacing:var(--track-caps);text-transform:uppercase;color:var(--ink-faint)}
+</style>
+
+<div class="board">
+<div class="wrap">
+
+  <header class="doc-head">
+    <div class="tiles" aria-hidden="true">
+      <div class="tile">M</div><div class="tile">A</div><div class="tile">T</div><div class="tile">C</div><div class="tile">H</div>
+    </div>
+    <p class="crumb">대기실 · 기능 ④ · 랜덤모드</p>
+    <h1>랜덤 매칭</h1>
+    <p>
+      앞의 셋과 결정적으로 다릅니다. <b>입력칸이 하나도 없습니다.</b>
+      사용자가 하는 일은 누르고 기다리는 것뿐이고,
+      그래서 이 화면이 해야 할 일은 딱 하나입니다 —
+      <b>기다리는 사람이 지루해하거나 불안해하지 않게 하는 것.</b>
+    </p>
+  </header>
+
+  <!-- ── 상태 ────────────────────────────────────────────── -->
+  <section class="section">
+    <h2>상태 6종</h2>
+    <p class="lede">
+      시작 전 → 찾는 중 → (오래 걸림) → 상대 찾음 / 취소함 / 끊김.
+      가운데 <b>2번에 가장 오래 머무릅니다.</b> 몇 초가 될 수도, 몇 분이 될 수도 있습니다.
+    </p>
+
+    <div class="grid">
+
+      <!-- 1 -->
+      <article class="case">
+        <p class="case-name"><i class="mark"></i>1 · 시작 전</p>
+        <div class="versus">
+          <div class="player">
+            <div class="player-tile">수</div>
+            <div class="player-name">수진</div>
+            <div class="player-role">나</div>
+          </div>
+          <div class="vs">VS</div>
+          <div class="player is-empty">
+            <div class="player-tile">?</div>
+            <div class="player-name">누구든</div>
+            <div class="player-role">상대</div>
+          </div>
+        </div>
+        <button class="btn-match" type="button" disabled>매칭 시작</button>
+        <p class="queue"><i class="queue-dot"></i>지금 <b>3</b>명이 상대를 찾고 있어요</p>
+        <p class="case-note">
+          누르기 전부터 <b>둘이 하는 게임이라는 걸 보여줍니다.</b>
+          아래 줄의 대기 인원수는 "지금 누르면 금방 잡히겠구나"를
+          알려주는 신호입니다. 3명이면 누르고, 0명이면 나중에 옵니다.
+        </p>
+      </article>
+
+      <!-- 2 -->
+      <article class="case">
+        <p class="case-name"><i class="mark is-wait"></i>2 · 찾는 중</p>
+        <div class="versus">
+          <div class="player">
+            <div class="player-tile">수</div>
+            <div class="player-name">수진</div>
+            <div class="player-role">나</div>
+          </div>
+          <div class="vs">VS</div>
+          <div class="player is-empty is-hunting">
+            <div class="player-tile">K</div>
+            <div class="player-name">찾는 중…</div>
+            <div class="player-role">상대</div>
+          </div>
+        </div>
+        <p class="elapsed">00:07</p>
+        <button class="btn-match is-stop" type="button" disabled>취소</button>
+        <p class="queue"><i class="queue-dot"></i>지금 <b>2</b>명이 상대를 찾고 있어요</p>
+        <p class="case-note">
+          상대 타일이 <b>글자를 바꿔가며 깜빡입니다</b> — 뭔가 돌아가고 있다는 표시입니다.
+          그 아래 <b>경과 시간</b>이 핵심입니다. 숫자가 올라가는 걸 보면
+          사람은 "멈춘 게 아니라 진행 중"이라고 느낍니다.
+        </p>
+      </article>
+
+      <!-- 3 -->
+      <article class="case is-extra">
+        <p class="case-name"><i class="mark is-wait"></i>3 · 오래 걸림 <span class="tag">제안</span></p>
+        <div class="versus">
+          <div class="player">
+            <div class="player-tile">수</div>
+            <div class="player-name">수진</div>
+            <div class="player-role">나</div>
+          </div>
+          <div class="vs">VS</div>
+          <div class="player is-empty is-hunting">
+            <div class="player-tile">Q</div>
+            <div class="player-name">찾는 중…</div>
+            <div class="player-role">상대</div>
+          </div>
+        </div>
+        <p class="elapsed">01:23</p>
+        <button class="btn-match is-stop" type="button" disabled>취소</button>
+        <p class="queue is-lonely"><i class="queue-dot"></i>지금은 기다리는 사람이 없어요</p>
+        <p class="hint">계속 기다리시면 상대가 오는 대로 연결해 드릴게요</p>
+        <p class="case-note">
+          <b>기획에 없던 칸입니다.</b> 1분이 넘어가면 사용자는 고장을 의심하기 시작합니다.
+          그때 <b>"아직 사람이 없다"는 사실을 알려주는 것</b>만으로 불안이 없어집니다.
+          고장이 아니라 그냥 한산한 시간이라는 뜻이니까요.
+        </p>
+      </article>
+
+      <!-- 4 -->
+      <article class="case">
+        <p class="case-name"><i class="mark is-ok"></i>4 · 상대 찾음</p>
+        <div class="versus">
+          <div class="player">
+            <div class="player-tile">수</div>
+            <div class="player-name">수진</div>
+            <div class="player-role">나</div>
+          </div>
+          <div class="vs">VS</div>
+          <div class="player is-found">
+            <div class="player-tile">엘</div>
+            <div class="player-name">엘리</div>
+            <div class="player-role">상대</div>
+          </div>
+        </div>
+        <p class="hint is-ok"><span class="hint-icon">✓</span>엘리 님과 연결됐어요. 곧 시작합니다…</p>
+        <p class="case-note">
+          물음표 자리에 <b>진짜 사람 이름이 들어찹니다.</b>
+          경과 시간과 취소 버튼은 사라집니다 — 이제 되돌릴 수 없으니
+          누를 수 있게 남겨두면 안 됩니다. 곧 게임 화면으로 넘어갑니다.
+        </p>
+      </article>
+
+      <!-- 5 -->
+      <article class="case">
+        <p class="case-name"><i class="mark"></i>5 · 취소함</p>
+        <div class="versus">
+          <div class="player">
+            <div class="player-tile">수</div>
+            <div class="player-name">수진</div>
+            <div class="player-role">나</div>
+          </div>
+          <div class="vs">VS</div>
+          <div class="player is-empty">
+            <div class="player-tile">?</div>
+            <div class="player-name">누구든</div>
+            <div class="player-role">상대</div>
+          </div>
+        </div>
+        <button class="btn-match" type="button" disabled>매칭 시작</button>
+        <p class="queue"><i class="queue-dot"></i>지금 <b>2</b>명이 상대를 찾고 있어요</p>
+        <p class="hint">매칭을 멈췄어요</p>
+        <p class="case-note">
+          1번과 <b>거의 같지만 한 줄이 다릅니다.</b> "멈췄어요" 한마디가 없으면
+          사용자는 취소가 된 건지, 화면이 튄 건지 알 수 없습니다.
+          잠깐 보였다가 사라집니다.
+        </p>
+      </article>
+
+      <!-- 6 -->
+      <article class="case is-extra">
+        <p class="case-name"><i class="mark is-bad"></i>6 · 연결이 끊김 <span class="tag">제안</span></p>
+        <div class="versus">
+          <div class="player">
+            <div class="player-tile">수</div>
+            <div class="player-name">수진</div>
+            <div class="player-role">나</div>
+          </div>
+          <div class="vs">VS</div>
+          <div class="player is-empty">
+            <div class="player-tile">?</div>
+            <div class="player-name">—</div>
+            <div class="player-role">상대</div>
+          </div>
+        </div>
+        <button class="btn-match" type="button" disabled>다시 시작</button>
+        <p class="hint is-bad"><span class="hint-icon">!</span>연결이 끊겼어요. 다시 시작해 주세요</p>
+        <p class="case-note">
+          <b>기획에 없던 칸입니다.</b> 기다리는 시간이 길수록 중간에 끊길 확률도 올라갑니다.
+          이걸 안 그려두면 <b>영원히 도는 화면</b>이 남습니다 —
+          사용자는 몇 분이고 앉아서 오지 않을 상대를 기다립니다.
+        </p>
+      </article>
+
+    </div>
+  </section>
+
+  <!-- ── 눌러보기 ────────────────────────────────────────── -->
+  <section class="section">
+    <h2>눌러보기</h2>
+    <p class="lede">
+      [매칭 시작]을 눌러보세요. 시간이 올라가고 상대 타일이 돌아갑니다.
+      6초쯤 지나면 상대가 잡힙니다. 취소도 눌러보세요.
+      <b>모양만 확인하는 미리보기입니다</b> — 어디에도 연결되어 있지 않습니다.
+    </p>
+
+    <div class="play">
+      <div class="play-stage" id="stage"></div>
+
+      <div class="switch">
+        <p class="switch-label">상태 바꿔보기</p>
+        <button class="chip" type="button" data-state="before" aria-pressed="true">시작 전</button>
+        <button class="chip" type="button" data-state="hunting" aria-pressed="false">찾는 중</button>
+        <button class="chip" type="button" data-state="lonely" aria-pressed="false">오래 걸림</button>
+        <button class="chip" type="button" data-state="found" aria-pressed="false">상대 찾음</button>
+        <button class="chip" type="button" data-state="stopped" aria-pressed="false">취소함</button>
+        <button class="chip" type="button" data-state="dropped" aria-pressed="false">연결 끊김</button>
+      </div>
+    </div>
+  </section>
+
+  <!-- ── 규칙 ────────────────────────────────────────────── -->
+  <section class="section">
+    <h2>정해둔 규칙</h2>
+    <p class="lede">숫자와 문구는 여기에 적힌 대로 화면에 박아둡니다. 바꾸려면 이 표부터 고칩니다.</p>
+
+    <div class="table-scroll">
+      <table>
+        <thead>
+          <tr><th>항목</th><th>값</th><th>왜</th></tr>
+        </thead>
+        <tbody>
+          <tr><td>경과 시간</td><td><code>mm:ss</code>, 1초마다</td><td>숫자가 올라가는 것만으로 "멈춘 게 아니다"가 전달됩니다.</td></tr>
+          <tr><td>숫자 폭</td><td>고정폭 숫자</td><td>안 그러면 <code>1</code>과 <code>8</code>의 폭이 달라 시계가 좌우로 떨립니다.</td></tr>
+          <tr><td>대기 인원수</td><td>항상 보임</td><td>0명이면 "고장"이 아니라 "한산한 시간"이라는 뜻입니다. 그걸 알려줘야 합니다.</td></tr>
+          <tr><td>오래 걸림 안내</td><td><code>60초</code>부터</td><td>1분이 넘으면 사람은 고장을 의심하기 시작합니다.</td></tr>
+          <tr><td>상대 찾은 뒤</td><td>취소 버튼 사라짐</td><td>되돌릴 수 없는 시점이라 누를 수 있게 두면 안 됩니다.</td></tr>
+          <tr><td>취소 버튼 색</td><td>테두리만, 채우지 않음</td><td>되돌리는 동작은 시작 동작과 같은 무게로 보이면 안 됩니다.</td></tr>
+          <tr><td>취소했을 때</td><td>"멈췄어요" 한 줄</td><td>한마디가 없으면 취소된 건지 화면이 튄 건지 모릅니다.</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </section>
+
+  <p class="colophon">Scrabble · Lobby 04</p>
+
+</div>
+</div>
+
+<script>
+  // 미리보기용입니다. 화면이 어떻게 보이는지만 확인하는 코드고,
+  // 실제 기능은 나중에 따로 붙입니다.
+  (function () {
+    var stage = document.getElementById('stage');
+    var chips = document.querySelectorAll('.chip');
+
+    var LETTERS = 'ABCDEFGHJKLMNPQRSTUVWXYZ';
+    var seconds = 0;
+    var tick = null;      // 1초마다 도는 시계
+    var shuffle = null;   // 상대 타일 글자 바꾸기
+
+    function clock(total) {
+      var m = Math.floor(total / 60), s = total % 60;
+      return (m < 10 ? '0' + m : m) + ':' + (s < 10 ? '0' + s : s);
+    }
+
+    function me() {
+      return '<div class="player">' +
+        '<div class="player-tile">수</div>' +
+        '<div class="player-name">수진</div>' +
+        '<div class="player-role">나</div>' +
+      '</div><div class="vs">VS</div>';
+    }
+
+    function foe(mode, letter, name) {
+      return '<div class="player ' + mode + '">' +
+        '<div class="player-tile" id="foeTile">' + letter + '</div>' +
+        '<div class="player-name">' + name + '</div>' +
+        '<div class="player-role">상대</div>' +
+      '</div>';
+    }
+
+    function queue(n) {
+      return n > 0
+        ? '<p class="queue"><i class="queue-dot"></i>지금 <b>' + n + '</b>명이 상대를 찾고 있어요</p>'
+        : '<p class="queue is-lonely"><i class="queue-dot"></i>지금은 기다리는 사람이 없어요</p>';
+    }
+
+    function stop() {
+      clearInterval(tick); tick = null;
+      clearInterval(shuffle); shuffle = null;
+    }
+
+    function render(state) {
+      stop();
+
+      if (state === 'before' || state === 'stopped') {
+        seconds = 0;
+        stage.innerHTML =
+          '<div class="versus">' + me() + foe('is-empty', '?', '누구든') + '</div>' +
+          '<button class="btn-match" id="go" type="button">매칭 시작</button>' +
+          queue(state === 'stopped' ? 2 : 3) +
+          (state === 'stopped' ? '<p class="hint">매칭을 멈췄어요</p>' : '');
+
+      } else if (state === 'hunting' || state === 'lonely') {
+        if (state === 'lonely' && seconds < 60) seconds = 83;
+        stage.innerHTML =
+          '<div class="versus">' + me() + foe('is-empty is-hunting', 'K', '찾는 중…') + '</div>' +
+          '<p class="elapsed" id="clock">' + clock(seconds) + '</p>' +
+          '<button class="btn-match is-stop" id="stop" type="button">취소</button>' +
+          queue(state === 'lonely' ? 0 : 2) +
+          (state === 'lonely'
+            ? '<p class="hint">계속 기다리시면 상대가 오는 대로 연결해 드릴게요</p>'
+            : '');
+        run();
+
+      } else if (state === 'found') {
+        stage.innerHTML =
+          '<div class="versus">' + me() + foe('is-found', '엘', '엘리') + '</div>' +
+          '<p class="hint is-ok"><span class="hint-icon">✓</span>엘리 님과 연결됐어요. 곧 시작합니다…</p>';
+
+      } else if (state === 'dropped') {
+        stage.innerHTML =
+          '<div class="versus">' + me() + foe('is-empty', '?', '—') + '</div>' +
+          '<button class="btn-match" id="go" type="button">다시 시작</button>' +
+          '<p class="hint is-bad"><span class="hint-icon">!</span>연결이 끊겼어요. 다시 시작해 주세요</p>';
+      }
+
+      wire();
+    }
+
+    // 시계와 타일 돌리기를 시작합니다.
+    function run() {
+      var clockEl = document.getElementById('clock');
+      var tileEl  = document.getElementById('foeTile');
+
+      tick = setInterval(function () {
+        seconds++;
+        if (clockEl) clockEl.textContent = clock(seconds);
+        // 60초를 넘기면 "오래 걸림" 화면으로 스스로 바뀝니다.
+        if (seconds === 60) { press('lonely'); render('lonely'); }
+      }, 1000);
+
+      shuffle = setInterval(function () {
+        if (tileEl) tileEl.textContent = LETTERS[Math.floor(Math.random() * LETTERS.length)];
+      }, 180);
+    }
+
+    function wire() {
+      var go = document.getElementById('go');
+      if (go) {
+        go.addEventListener('click', function () {
+          seconds = 0;
+          press('hunting');
+          render('hunting');
+          // 6초쯤 뒤에 상대가 잡힙니다. (실제로는 언제 잡힐지 모릅니다)
+          setTimeout(function () {
+            if (tick) { press('found'); render('found'); }
+          }, 6000);
+        });
+      }
+
+      var btn = document.getElementById('stop');
+      if (btn) {
+        btn.addEventListener('click', function () {
+          press('stopped');
+          render('stopped');
+        });
+      }
+    }
+
+    function press(state) {
+      chips.forEach(function (chip) {
+        chip.setAttribute('aria-pressed', String(chip.dataset.state === state));
+      });
+    }
+
+    chips.forEach(function (chip) {
+      chip.addEventListener('click', function () {
+        seconds = 0;
+        press(chip.dataset.state);
+        render(chip.dataset.state);
+      });
+    });
+
+    render('before');
+  })();
+</script>
