@@ -1,0 +1,101 @@
+<!-- @dsCard group="대기실 (Lobby)" viewport="1280x1180" name="테마색 후보 6" subtitle="타일·버튼·통과 표시에 쓰이는 색" -->
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>테마색 후보 — 스크래블</title>
+<link rel="stylesheet" href="../../styles.css" />
+<style>
+*{box-sizing:border-box}
+body{margin:0;padding:44px 28px 72px;background:var(--paper);color:var(--ink);font-family:var(--font-text);line-height:1.6;-webkit-font-smoothing:antialiased}
+.wrap{max-width:1020px;margin:0 auto}
+h1{margin:0 0 10px;font-family:var(--font-display);font-weight:700;font-size:30px;letter-spacing:-.01em}
+.lede{margin:0 0 36px;max-width:60ch;font-size:15px;color:var(--ink-soft);text-wrap:pretty}
+.opts{display:grid;grid-template-columns:repeat(auto-fill,minmax(430px,1fr));gap:0}
+.opt{margin:-1px 0 0 -1px;padding:24px;background:var(--paper-2);border:1px solid var(--rule)}
+.opt.chosen{background:#fff;box-shadow:inset 0 0 0 4px var(--theme-tint)}
+.head{display:flex;align-items:baseline;gap:10px;margin:0 0 18px}
+.num{font-family:var(--font-mono);font-size:11px;letter-spacing:var(--track-caps);color:var(--ink-faint)}
+.name{font-family:var(--font-display);font-size:13px;font-weight:700;letter-spacing:var(--track-caps);text-transform:uppercase}
+.hex{margin-left:auto;font-family:var(--font-mono);font-size:11px;color:var(--ink-faint)}
+.tiles{display:flex;margin:0 0 18px}
+.tile{width:38px;height:38px;display:grid;place-items:center;margin:-1px 0 0 -1px;background:var(--t);border:1px solid var(--rule);font-family:var(--font-display);font-weight:700;font-size:18px}
+.row{display:flex;align-items:stretch}
+.field{flex:1;min-width:0;height:46px;margin-right:-1px;padding:0 13px;display:flex;align-items:center;font-size:15px;background:#fff;border:1.5px solid var(--rule)}
+.field.pass{background:var(--tint)}
+.btn{flex:none;height:46px;padding:0 18px;display:grid;place-items:center;background:var(--t);border:1.5px solid var(--rule);font-family:var(--font-display);font-size:11px;font-weight:700;letter-spacing:var(--track-caps);text-transform:uppercase}
+.btn.off{background:transparent;border-color:var(--grid);color:var(--ink-faint)}
+.hint{display:flex;align-items:center;gap:7px;margin:12px 0 0;font-size:13.5px;color:var(--ink-soft)}
+.chit{width:18px;height:18px;display:grid;place-items:center;background:var(--deep);border:1px solid var(--rule);font-family:var(--font-display);font-size:11px;font-weight:700}
+.swatches{display:flex;margin:20px 0 0}
+.sw{flex:1;height:26px;margin-left:-1px;border:1px solid var(--rule)}
+.note{margin:14px 0 0;padding-top:13px;border-top:1px solid var(--grid);font-size:12.5px;color:var(--ink-soft);text-wrap:pretty}
+</style>
+<div class="wrap">
+<h1>테마색 후보</h1>
+<p class="lede">타일·버튼·통과 표시에 쓰이는 한 색만 바꿉니다. 종이색(<code style="font-family:var(--font-mono)">#F3F0E8</code>)과 잉크(<code style="font-family:var(--font-mono)">#15120E</code>)는 그대로 둡니다 — 스크래블 보드의 뼈대는 종이와 검정 글자니까요.</p>
+<div class="opts">
+
+  <article class="opt" style="--t:#EFA6B8;--deep:#D97E94;--tint:#FAE4EA">
+    <p class="head"><span class="num">01</span><span class="name">로즈</span><span class="hex">#EFA6B8</span></p>
+    <div class="tiles"><div class="tile">N</div><div class="tile">A</div><div class="tile">M</div><div class="tile">E</div></div>
+    <div class="row"><div class="field pass">수진</div><div class="btn">중복확인</div></div>
+    <p class="hint"><span class="chit">✓</span>사용 가능한 닉네임입니다</p>
+    <div class="swatches"><div class="sw" style="background:#FAE4EA"></div><div class="sw" style="background:#EFA6B8"></div><div class="sw" style="background:#D97E94"></div></div>
+    <p class="note">레퍼런스 포스터에 가장 가깝고, 종이색과 대비가 부드럽습니다.</p>
+  </article>
+
+  <article class="opt" style="--t:#E7C24F;--deep:#C29B2C;--tint:#F8EFCE">
+    <p class="head"><span class="num">02</span><span class="name">머스터드</span><span class="hex">#E7C24F</span></p>
+    <div class="tiles"><div class="tile">N</div><div class="tile">A</div><div class="tile">M</div><div class="tile">E</div></div>
+    <div class="row"><div class="field pass">수진</div><div class="btn">중복확인</div></div>
+    <p class="hint"><span class="chit">✓</span>사용 가능한 닉네임입니다</p>
+    <div class="swatches"><div class="sw" style="background:#F8EFCE"></div><div class="sw" style="background:#E7C24F"></div><div class="sw" style="background:#C29B2C"></div></div>
+    <p class="note">실제 스크래블 타일의 나무색에 가장 가깝습니다. 보드게임 느낌이 제일 강하고, 종이색과 같은 계열이라 차분합니다.</p>
+  </article>
+
+  <article class="opt" style="--t:#A8C3A0;--deep:#7E9E75;--tint:#E8EFE4">
+    <p class="head"><span class="num">03</span><span class="name">세이지</span><span class="hex">#A8C3A0</span></p>
+    <div class="tiles"><div class="tile">N</div><div class="tile">A</div><div class="tile">M</div><div class="tile">E</div></div>
+    <div class="row"><div class="field pass">수진</div><div class="btn">중복확인</div></div>
+    <p class="hint"><span class="chit">✓</span>사용 가능한 닉네임입니다</p>
+    <div class="swatches"><div class="sw" style="background:#E8EFE4"></div><div class="sw" style="background:#A8C3A0"></div><div class="sw" style="background:#7E9E75"></div></div>
+    <p class="note">가장 조용합니다. 다만 "통과=초록"과 색이 겹쳐서, 성공 표시를 다른 색으로 따로 잡아야 합니다.</p>
+  </article>
+
+  <article class="opt" style="--t:#DE8A63;--deep:#BF6A44;--tint:#F7E3D8">
+    <p class="head"><span class="num">04</span><span class="name">테라코타</span><span class="hex">#DE8A63</span></p>
+    <div class="tiles"><div class="tile">N</div><div class="tile">A</div><div class="tile">M</div><div class="tile">E</div></div>
+    <div class="row"><div class="field pass">수진</div><div class="btn">중복확인</div></div>
+    <p class="hint"><span class="chit">✓</span>사용 가능한 닉네임입니다</p>
+    <div class="swatches"><div class="sw" style="background:#F7E3D8"></div><div class="sw" style="background:#DE8A63"></div><div class="sw" style="background:#BF6A44"></div></div>
+    <p class="note">로즈보다 따뜻하고 힘이 셉니다. 다만 경고(빨강)와 계열이 가까워, 오류 색은 더 진하게 벌려야 합니다.</p>
+  </article>
+
+  <article class="opt" style="--t:#9BB3D4;--deep:#7290BA;--tint:#E4EAF4">
+    <p class="head"><span class="num">05</span><span class="name">슬레이트 블루</span><span class="hex">#9BB3D4</span></p>
+    <div class="tiles"><div class="tile">N</div><div class="tile">A</div><div class="tile">M</div><div class="tile">E</div></div>
+    <div class="row"><div class="field pass">수진</div><div class="btn">중복확인</div></div>
+    <p class="hint"><span class="chit">✓</span>사용 가능한 닉네임입니다</p>
+    <div class="swatches"><div class="sw" style="background:#E4EAF4"></div><div class="sw" style="background:#9BB3D4"></div><div class="sw" style="background:#7290BA"></div></div>
+    <p class="note">따뜻한 종이색과 부딪히며 인쇄물 같은 대비가 납니다. 초록·빨강 신호색과 안 겹치는 게 실용적 장점입니다.</p>
+  </article>
+
+  <article class="opt chosen" style="--t:#A9C8E4;--deep:#7BA5C9;--tint:#E7F0F8">
+    <p class="head"><span class="num">07</span><span class="name">하늘색 — 채택</span><span class="hex">#A9C8E4</span></p>
+    <div class="tiles"><div class="tile">N</div><div class="tile">A</div><div class="tile">M</div><div class="tile">E</div></div>
+    <div class="row"><div class="field pass">수진</div><div class="btn">중복확인</div></div>
+    <p class="hint"><span class="chit">✓</span>사용 가능한 닉네임입니다</p>
+    <div class="swatches"><div class="sw" style="background:#E7F0F8"></div><div class="sw" style="background:#A9C8E4"></div><div class="sw" style="background:#7BA5C9"></div></div>
+    <p class="note">채택안. 크림 종이의 따뜻함과 부딪히며 인쇄물 같은 대비가 납니다. 05 슬레이트보다 밝고 맑아서 타일이 가볍게 뜹니다. 초록·빨강 신호색과 겹치지 않는 것도 장점입니다.</p>
+  </article>
+
+  <article class="opt" style="--t:#BDAEDB;--deep:#9884C4;--tint:#EDE7F6">
+    <p class="head"><span class="num">06</span><span class="name">라일락</span><span class="hex">#BDAEDB</span></p>
+    <div class="tiles"><div class="tile">N</div><div class="tile">A</div><div class="tile">M</div><div class="tile">E</div></div>
+    <div class="row"><div class="field pass">수진</div><div class="btn">중복확인</div></div>
+    <p class="hint"><span class="chit">✓</span>사용 가능한 닉네임입니다</p>
+    <div class="swatches"><div class="sw" style="background:#EDE7F6"></div><div class="sw" style="background:#BDAEDB"></div><div class="sw" style="background:#9884C4"></div></div>
+    <p class="note">로즈의 사촌. 같은 부드러움을 유지하면서 조금 더 서늘하고 덜 흔합니다.</p>
+  </article>
+
+</div>
+</div>

@@ -1,0 +1,26 @@
+/* 스크래블 — 전역 토큰
+   무드: 크림 종이 위에 얹힌 하늘색 타일과 굵은 검정 대문자. */
+:root{
+--paper:#F3F0E8;
+--paper-2:#FBF9F3;
+--ink:#15120E;
+--ink-soft:#6E675A;
+--ink-faint:#A29A88;
+/* 테마색 — 타일·버튼·강조 */
+--theme:#A9C8E4;
+--theme-deep:#7BA5C9;
+--theme-tint:#E7F0F8;
+--rule:#15120E;
+--grid:#C7C0AF;
+/* 신호색 */
+--ok:#1F6B4A;
+--ok-tint:#E4EFE8;
+--bad:#B23A3A;
+--bad-tint:#F7E5E4;
+--cell:42px;
+--font-display:"Helvetica Neue",Helvetica,Arial,sans-serif;
+--font-text:"Pretendard","Apple SD Gothic Neo","Malgun Gothic",system-ui,sans-serif;
+--font-mono:ui-monospace,SFMono-Regular,Menlo,monospace;
+--track-wide:.34em;
+--track-caps:.16em;
+}
