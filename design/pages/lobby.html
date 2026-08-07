@@ -1,0 +1,730 @@
+<!-- @dsCard group="페이지 (Pages)" viewport="1280x1400" name="대기실 페이지 (전체)" subtitle="기능 5개를 순서대로 이은 화면 · 처음부터 끝까지 눌러볼 수 있음" -->
+<!--
+  대기실 페이지 — 지금까지 그린 조각 5개를 순서대로 이은 것입니다.
+    ① 닉네임 + 중복확인   components/lobby/nickname-field.html
+    ─ 모드 선택            components/lobby/mode-select.html
+    ② 방코드 입력 + 입장   components/lobby/room-code-entry.html
+    ③ 방 생성 + 코드 공유  components/lobby/room-create.html
+    ④ 랜덤 매칭            components/lobby/random-match.html
+
+  새로 만든 기능은 없습니다. 순서와 잠금 규칙만 더했습니다.
+  화면(모양)만 담은 파일이라 서버를 부르지 않습니다. 아래 목(mock) 값으로 흉내만 냅니다.
+-->
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>대기실 — 스크래블</title>
+<link rel="stylesheet" href="../styles.css" />
+<style>
+*{box-sizing:border-box}
+body{margin:0;padding:0;background:var(--paper);color:var(--ink);font-family:var(--font-text);line-height:1.6;-webkit-font-smoothing:antialiased}
+.board{min-height:100vh;padding:40px 20px 72px}
+
+/* ── 대기실 본체 — 좁은 한 줄로 세웁니다. ─────────────────
+   가로로 벌리면 눈이 좌우로 왔다갔다 하게 됩니다.
+   순서대로 밟는 화면은 위에서 아래로 한 줄이 제일 빠릅니다. */
+.lobby{max-width:520px;margin:0 auto;background:var(--paper-2);border:1.5px solid var(--rule)}
+
+/* ── 머리 ──────────────────────────────────────────────── */
+.crown{padding:26px 26px 22px;border-bottom:1.5px solid var(--rule);text-align:center}
+.tiles{display:flex;justify-content:center;margin:0 0 14px}
+.tile{width:34px;height:38px;display:grid;place-items:center;background:var(--theme);border:1px solid var(--rule);margin-left:-1px;font-family:var(--font-display);font-weight:700;font-size:17px;color:var(--ink)}
+.tile:first-child{margin-left:0}
+.crown h1{margin:0;font-family:var(--font-mono);font-size:11px;font-weight:400;letter-spacing:var(--track-caps);text-transform:uppercase;color:var(--ink-soft)}
+
+/* ── 진행 표시 ─────────────────────────────────────────── */
+.stepper{display:flex;border-bottom:1.5px solid var(--rule)}
+.pip{flex:1;margin-left:-1px;padding:9px 6px;display:flex;align-items:center;justify-content:center;gap:7px;
+  background:transparent;border-left:1px solid var(--grid);
+  font-family:var(--font-mono);font-size:10.5px;letter-spacing:var(--track-caps);text-transform:uppercase;color:var(--ink-faint)}
+.pip:first-child{border-left:none}
+.pip-no{width:17px;height:17px;flex:none;display:grid;place-items:center;border:1px solid var(--grid);font-size:9px}
+.pip.is-now{background:var(--theme-tint);color:var(--ink)}
+.pip.is-now .pip-no{background:var(--theme);border-color:var(--rule)}
+.pip.is-done{color:var(--ok)}
+.pip.is-done .pip-no{background:var(--ok);border-color:var(--rule);color:#fff}
+
+/* ── 단계 ──────────────────────────────────────────────── */
+.step{padding:24px 26px;border-top:1px solid var(--grid)}
+.step:first-of-type{border-top:none}
+.step.is-locked{opacity:.4;pointer-events:none}
+.step-head{display:flex;align-items:center;gap:9px;margin:0 0 14px;
+  font-family:var(--font-mono);font-size:11px;letter-spacing:var(--track-caps);text-transform:uppercase;color:var(--ink)}
+.step-no{width:19px;height:19px;flex:none;display:grid;place-items:center;background:var(--theme);border:1px solid var(--rule);font-size:10px}
+.step.is-locked .step-no{background:transparent;border-color:var(--grid)}
+
+/* 끝난 단계는 한 줄로 접습니다. */
+.done-row{display:flex;align-items:center;gap:9px;font-size:14px}
+.done-row .tick{width:18px;height:18px;flex:none;display:grid;place-items:center;background:var(--ok);border:1px solid var(--rule);color:#fff;font-family:var(--font-display);font-size:11px;font-weight:700}
+.done-row b{font-weight:600}
+.btn-link{margin-left:auto;padding:4px 9px;font-family:var(--font-mono);font-size:10.5px;letter-spacing:var(--track-caps);text-transform:uppercase;
+  color:var(--ink-soft);background:transparent;border:1px solid var(--grid);border-radius:0;cursor:pointer}
+.btn-link:hover{color:var(--ink);border-color:var(--rule)}
+
+/* ── ① 닉네임 ──────────────────────────────────────────── */
+.field-row{display:flex;align-items:stretch}
+.field{flex:1;min-width:0;height:48px;margin-right:-1px;padding:0 14px;font:inherit;font-size:16px;color:var(--ink);
+  background:#fff;border:1.5px solid var(--rule);border-radius:0;outline:none;transition:background .15s,box-shadow .15s}
+.field::placeholder{color:var(--ink-faint)}
+.field:focus{box-shadow:inset 0 -3px 0 var(--theme)}
+.field.is-ok{background:var(--ok-tint)}
+.field.is-bad{background:var(--bad-tint)}
+.btn-check{flex:none;height:48px;padding:0 18px;
+  font-family:var(--font-display);font-size:12px;font-weight:700;letter-spacing:var(--track-caps);text-transform:uppercase;white-space:nowrap;
+  color:var(--ink);background:var(--theme);border:1.5px solid var(--rule);border-radius:0;cursor:pointer;transition:background .15s}
+.btn-check:hover:not(:disabled){background:var(--theme-deep)}
+.btn-check:disabled{cursor:not-allowed;background:transparent;color:var(--ink-faint);border-color:var(--grid)}
+.counter{margin-left:auto;font-family:var(--font-mono);font-size:11px;font-variant-numeric:tabular-nums;color:var(--ink-faint)}
+
+/* ── 모드 선택 ─────────────────────────────────────────── */
+.modes{display:flex;align-items:stretch}
+.mode{position:relative;flex:1;min-width:0;margin-left:-1px;padding:16px 12px;display:block;text-align:center;cursor:pointer;
+  background:#fff;border:1.5px solid var(--rule);transition:background .15s}
+.mode:first-child{margin-left:0}
+.mode:hover{background:var(--theme-tint)}
+.mode-input{position:absolute;width:1px;height:1px;opacity:0;pointer-events:none}
+.mode:has(.mode-input:checked){background:var(--theme)}
+.mode:has(.mode-input:focus-visible){box-shadow:inset 0 0 0 3px var(--theme-deep)}
+.mode-pics{display:flex;justify-content:center;margin:0 0 10px}
+.mode-pic{width:27px;height:32px;margin-left:-1px;display:grid;place-items:center;background:var(--paper-2);border:1px solid var(--rule);
+  font-family:var(--font-display);font-size:14px;font-weight:700}
+.mode-pic:first-child{margin-left:0}
+.mode-pic.is-any{background:transparent;border-style:dashed;border-color:var(--grid);color:var(--ink-faint)}
+.mode:has(.mode-input:checked) .mode-pic{background:#fff}
+.mode:has(.mode-input:checked) .mode-pic.is-any{background:transparent;border-color:var(--rule);color:var(--ink)}
+.mode-name{font-family:var(--font-display);font-size:13px;font-weight:700;letter-spacing:var(--track-caps);text-transform:uppercase}
+.mode-desc{margin-top:3px;font-size:12px;color:var(--ink-soft)}
+
+/* ── 친구 모드 안의 두 갈래 ────────────────────────────── */
+.split{margin-top:18px;padding-top:16px;border-top:1px solid var(--grid)}
+.split-label{margin:0 0 10px;font-family:var(--font-mono);font-size:10.5px;letter-spacing:var(--track-caps);text-transform:uppercase;color:var(--ink-soft)}
+.or{display:flex;align-items:center;gap:10px;margin:16px 0;
+  font-family:var(--font-mono);font-size:10px;letter-spacing:var(--track-caps);text-transform:uppercase;color:var(--ink-faint)}
+.or::before,.or::after{content:"";flex:1;height:1px;background:var(--grid)}
+
+.code-row{display:flex}
+.code-cell{width:44px;height:52px;margin-left:-1px;padding:0;
+  font-family:var(--font-display);font-size:22px;font-weight:700;text-align:center;text-transform:uppercase;
+  color:var(--ink);background:#fff;border:1.5px solid var(--rule);border-radius:0;outline:none;transition:background .15s,box-shadow .15s}
+.code-cell:first-child{margin-left:0}
+.code-cell:focus{box-shadow:inset 0 -4px 0 var(--theme)}
+.code-row.is-bad .code-cell{background:var(--bad-tint)}
+.code-row.is-shake{animation:shake .3s ease-in-out}
+@keyframes shake{25%{transform:translateX(-5px)}75%{transform:translateX(5px)}}
+
+.entry-row{display:flex;align-items:stretch}
+.btn-enter{flex:none;margin-left:-1px;height:52px;padding:0 18px;
+  font-family:var(--font-display);font-size:12px;font-weight:700;letter-spacing:var(--track-caps);text-transform:uppercase;
+  color:var(--ink);background:var(--theme);border:1.5px solid var(--rule);border-radius:0;cursor:pointer;transition:background .15s}
+.btn-enter:hover:not(:disabled){background:var(--theme-deep)}
+.btn-enter:disabled{cursor:not-allowed;background:transparent;color:var(--ink-faint);border-color:var(--grid)}
+
+.btn-wide{width:100%;height:52px;
+  font-family:var(--font-display);font-size:12px;font-weight:700;letter-spacing:var(--track-caps);text-transform:uppercase;
+  color:var(--ink);background:var(--theme);border:1.5px solid var(--rule);border-radius:0;cursor:pointer;transition:background .15s}
+.btn-wide:hover:not(:disabled){background:var(--theme-deep)}
+.btn-wide:disabled{cursor:not-allowed;background:transparent;color:var(--ink-faint);border-color:var(--grid)}
+.btn-wide.is-quiet{background:transparent}
+.btn-wide.is-quiet:hover:not(:disabled){background:var(--bad-tint);border-color:var(--bad);color:var(--bad)}
+
+/* 발급된 코드 (호스트) */
+.code-show{display:flex;justify-content:center;margin:0 0 12px}
+.show-cell{width:52px;height:64px;margin-left:-1px;display:grid;place-items:center;background:var(--theme);border:1.5px solid var(--rule);
+  font-family:var(--font-display);font-size:28px;font-weight:700}
+.show-cell:first-child{margin-left:0}
+.share-row{display:flex;align-items:stretch;margin-bottom:14px}
+.btn-copy{flex:1;height:42px;font-family:var(--font-display);font-size:11px;font-weight:700;letter-spacing:var(--track-caps);text-transform:uppercase;
+  color:var(--ink);background:transparent;border:1.5px solid var(--rule);border-radius:0;cursor:pointer;transition:background .15s}
+.btn-copy:hover{background:var(--theme-tint)}
+.btn-copy.is-done{background:var(--ok-tint);border-color:var(--ok);color:var(--ok)}
+.btn-cancel{flex:none;margin-left:-1px;height:42px;padding:0 14px;
+  font-family:var(--font-display);font-size:11px;font-weight:700;letter-spacing:var(--track-caps);text-transform:uppercase;
+  color:var(--ink-soft);background:transparent;border:1.5px solid var(--grid);border-radius:0;cursor:pointer}
+.btn-cancel:hover{color:var(--bad);border-color:var(--bad)}
+
+/* ── 두 사람 자리 — 친구·랜덤이 같이 씁니다. ───────────── */
+.versus{display:flex;align-items:stretch;margin-bottom:12px}
+.player{flex:1;min-width:0;margin-left:-1px;padding:13px 10px;background:#fff;border:1.5px solid var(--rule);text-align:center}
+.player:first-child{margin-left:0}
+.player.is-empty{background:transparent;border-style:dashed;border-color:var(--grid)}
+.player.is-found{background:var(--ok-tint)}
+.player-tile{width:38px;height:44px;margin:0 auto 8px;display:grid;place-items:center;background:var(--theme);border:1.5px solid var(--rule);
+  font-family:var(--font-display);font-size:19px;font-weight:700}
+.player.is-empty .player-tile{background:transparent;border-style:dashed;border-color:var(--grid);color:var(--ink-faint)}
+.player.is-found .player-tile{background:var(--ok);color:#fff;border-color:var(--rule)}
+.player.is-hunting .player-tile{animation:flip 1s steps(2,end) infinite}
+.player-name{font-size:13.5px;font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.player.is-empty .player-name{color:var(--ink-faint);font-weight:400}
+.player-role{margin-top:2px;font-family:var(--font-mono);font-size:9.5px;letter-spacing:var(--track-caps);text-transform:uppercase;color:var(--ink-faint)}
+.vs{flex:none;width:34px;margin-left:-1px;display:grid;place-items:center;background:var(--paper);border:1.5px solid var(--rule);
+  font-family:var(--font-display);font-size:11px;font-weight:700;color:var(--ink-soft)}
+
+.elapsed{margin:0 0 12px;text-align:center;font-family:var(--font-mono);font-size:22px;font-variant-numeric:tabular-nums;color:var(--ink)}
+.queue{display:flex;align-items:center;justify-content:center;gap:7px;margin:12px 0 0;font-size:12.5px;color:var(--ink-soft)}
+.queue b{color:var(--ink);font-variant-numeric:tabular-nums}
+.queue-dot{width:8px;height:8px;flex:none;background:var(--ok);border:1px solid var(--rule)}
+.queue.is-lonely .queue-dot{background:transparent;border-color:var(--grid)}
+
+/* ── 안내 한 줄 ────────────────────────────────────────── */
+.hint{display:flex;align-items:center;gap:7px;margin:11px 0 0;min-height:22px;font-size:13px;color:var(--ink-soft)}
+.hint.is-ok{color:var(--ok)}
+.hint.is-bad{color:var(--bad)}
+.hint.is-wait{color:var(--ink)}
+.hint.is-mid{justify-content:center;text-align:center}
+.hint-icon{flex:none;width:18px;height:18px;display:grid;place-items:center;
+  font-family:var(--font-display);font-size:11px;font-weight:700;color:#fff}
+.is-ok>.hint-icon{background:var(--ok)}
+.is-bad>.hint-icon{background:var(--bad)}
+.waiting{flex:none;width:14px;height:14px;background:var(--theme);border:1px solid var(--rule);animation:flip 1s steps(2,end) infinite}
+@keyframes flip{50%{background:transparent}}
+@media (prefers-reduced-motion:reduce){.waiting,.player.is-hunting .player-tile{animation-duration:3s}.code-row.is-shake{animation:none}}
+
+/* ── ③ 시작 ──────────────────────────────────────────────
+   누르는 버튼이 없습니다. 상대가 정해지면 스스로 넘어갑니다.
+   그래서 이 칸은 "지금 무슨 일이 일어나는지"만 알려줍니다. */
+.leaving{padding:18px 14px;text-align:center;background:var(--ok-tint);border:1.5px solid var(--rule)}
+.leaving.is-idle{background:transparent;border-style:dashed;border-color:var(--grid)}
+.leaving .hint{margin:0}
+
+/* ── 페이지 밖 설명 ────────────────────────────────────── */
+.aside{max-width:520px;margin:26px auto 0}
+.aside h2{margin:0 0 8px;font-family:var(--font-mono);font-size:11px;font-weight:400;letter-spacing:var(--track-caps);text-transform:uppercase;color:var(--ink-soft)}
+.aside p{margin:0 0 10px;font-size:13px;color:var(--ink-soft);text-wrap:pretty}
+.aside b{color:var(--ink)}
+.reset{margin-top:14px;padding:8px 14px;font-family:var(--font-mono);font-size:10.5px;letter-spacing:var(--track-caps);text-transform:uppercase;
+  color:var(--ink);background:transparent;border:1px solid var(--rule);border-radius:0;cursor:pointer}
+.reset:hover{background:var(--theme-tint)}
+</style>
+
+<div class="board">
+
+  <div class="lobby">
+
+    <div class="crown">
+      <div class="tiles" aria-hidden="true">
+        <div class="tile">S</div><div class="tile">C</div><div class="tile">R</div><div class="tile">A</div>
+        <div class="tile">B</div><div class="tile">B</div><div class="tile">L</div><div class="tile">E</div>
+      </div>
+      <h1>대기실</h1>
+    </div>
+
+    <div class="stepper" id="stepper">
+      <div class="pip is-now"><i class="pip-no">1</i>닉네임</div>
+      <div class="pip"><i class="pip-no">2</i>모드</div>
+      <div class="pip"><i class="pip-no">3</i>시작</div>
+    </div>
+
+    <!-- ① 닉네임 -->
+    <section class="step" id="step1">
+      <p class="step-head"><i class="step-no">1</i>닉네임</p>
+      <div id="step1Body"></div>
+    </section>
+
+    <!-- ② 모드 + 그에 따라 열리는 것 -->
+    <section class="step is-locked" id="step2">
+      <p class="step-head"><i class="step-no">2</i>누구와 할까요</p>
+      <div id="step2Body"></div>
+    </section>
+
+    <!-- ③ 시작 -->
+    <section class="step is-locked" id="step3">
+      <p class="step-head"><i class="step-no">3</i>시작</p>
+      <div id="step3Body"></div>
+    </section>
+
+  </div>
+
+  <aside class="aside">
+    <h2>이 화면에 대해</h2>
+    <p>
+      따로 그린 조각 다섯을 순서대로 이은 것입니다. <b>새로 만든 기능은 없습니다.</b>
+      더한 것은 순서와 잠금 규칙뿐입니다 — 앞 단계가 끝나야 다음 칸이 열립니다.
+    </p>
+    <p>
+      <b>모양만 확인하는 미리보기입니다.</b> 서버를 부르지 않고 흉내만 냅니다:
+      닉네임 <b>엘리</b>·<b>은우</b>는 이미 쓰는 중이고, 통하는 방코드는 <b>A7K2</b> 하나뿐입니다.
+      방을 만들면 4초 뒤 친구가, 매칭을 걸면 6초 뒤 상대가 나타납니다.
+    </p>
+    <p>
+      <b>상대가 정해지면 누를 것 없이 스스로 게임 화면으로 넘어갑니다.</b>
+      3단계에 버튼을 두지 않은 이유입니다 — 이미 둘 다 준비된 상태라
+      한 번 더 물어볼 것이 없습니다.
+    </p>
+    <button class="reset" id="reset" type="button">처음부터 다시</button>
+  </aside>
+
+</div>
+
+<script>
+  // 미리보기용입니다. 화면이 어떻게 보이는지만 확인하는 코드고,
+  // 실제 기능은 나중에 따로 붙입니다.
+  (function () {
+
+    // ── 목(mock) 값 — 백엔드 대신입니다 ─────────────────
+    var TAKEN_NICKS = ['엘리', '은우'];   // 이미 쓰는 중인 닉네임
+    var LIVE_ROOM   = 'A7K2';             // 통하는 방코드
+    var QUEUE       = 3;                  // 랜덤 대기 인원
+
+    var NICK_MAX = 12;
+    var CODE_LEN = 4;
+    var LETTERS  = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';   // O·0·I·1 은 뺍니다
+
+    // ── 지금 어디까지 왔는지 ────────────────────────────
+    var s = {
+      nick: null,      // 확인까지 끝난 닉네임
+      mode: null,      // 'friend' | 'random'
+      room: null,      // 호스트가 받은 코드
+      foe: null,       // 상대 닉네임
+      phase: null,     // 'making' | 'hosting' | 'hunting'
+      leaving: false   // 게임 화면으로 넘어가는 중인지
+    };
+
+    var timers = [];
+    function later(fn, ms) { timers.push(setTimeout(fn, ms)); }
+    function clearAll() {
+      // 기다리던 것과 1초마다 도는 시계를 함께 멈춥니다.
+      timers.forEach(function (t) { clearTimeout(t); clearInterval(t); });
+      timers = [];
+    }
+
+    var $ = function (id) { return document.getElementById(id); };
+
+    // ── 그리기 ──────────────────────────────────────────
+    function render() {
+      renderStepper();
+      renderStep1();
+      renderStep2();
+      renderStep3();
+    }
+
+    function renderStepper() {
+      var pips = $('stepper').children;
+      var at = s.nick ? (s.foe ? 2 : 1) : 0;
+      for (var i = 0; i < 3; i++) {
+        pips[i].className = 'pip' + (i < at ? ' is-done' : i === at ? ' is-now' : '');
+      }
+    }
+
+    // ── ① 닉네임 ───────────────────────────────────────
+    function renderStep1() {
+      var body = $('step1Body');
+
+      // 끝났으면 한 줄로 접습니다. 다 끝난 단계가 자리를 많이
+      // 차지하고 있으면 지금 할 일이 어디인지 흐려집니다.
+      if (s.nick) {
+        body.innerHTML =
+          '<p class="done-row"><i class="tick">✓</i><b>' + esc(s.nick) + '</b>' +
+          '<button class="btn-link" id="renick" type="button">바꾸기</button></p>';
+        $('renick').addEventListener('click', function () {
+          clearAll();
+          s = { nick: null, mode: null, room: null, foe: null, phase: null, leaving: false };
+          render();
+        });
+        return;
+      }
+
+      body.innerHTML =
+        '<div class="field-row">' +
+          '<input class="field" id="nick" type="text" maxlength="' + NICK_MAX + '" ' +
+                 'placeholder="닉네임을 입력하세요" autocomplete="off" />' +
+          '<button class="btn-check" id="nickBtn" type="button">중복확인</button>' +
+        '</div>' +
+        '<p class="hint" id="nickHint"><span class="counter">0 / ' + NICK_MAX + '</span></p>';
+
+      var input = $('nick'), btn = $('nickBtn'), hint = $('nickHint');
+
+      function valid(v) { return v.length > 0 && v.length <= NICK_MAX && !/\s/.test(v); }
+
+      function paint(kind, text) {
+        input.className = 'field' + (kind === 'ok' ? ' is-ok' : kind === 'bad' ? ' is-bad' : '');
+        hint.className = 'hint' + (kind === 'ok' ? ' is-ok' : kind === 'bad' ? ' is-bad' : kind === 'wait' ? ' is-wait' : '');
+        hint.innerHTML = '';
+        if (kind === 'wait') hint.appendChild(el('span', 'waiting'));
+        else if (kind === 'ok') hint.appendChild(el('span', 'hint-icon', '✓'));
+        else if (kind === 'bad') hint.appendChild(el('span', 'hint-icon', '!'));
+        if (text) hint.appendChild(document.createTextNode(' ' + text + ' '));
+        hint.appendChild(el('span', 'counter', input.value.length + ' / ' + NICK_MAX));
+      }
+
+      input.addEventListener('input', function () {
+        var v = input.value;
+        btn.disabled = !valid(v);
+        if (v.length && !valid(v)) paint('bad', '공백 없이 1~' + NICK_MAX + '자로 입력해 주세요');
+        else paint('', '');
+      });
+
+      btn.addEventListener('click', function () {
+        var v = input.value;
+        btn.disabled = true; btn.textContent = '확인 중…'; input.disabled = true;
+        paint('wait', '쓸 수 있는 닉네임인지 알아보는 중이에요');
+
+        later(function () {
+          input.disabled = false;
+          btn.textContent = '중복확인';
+          if (TAKEN_NICKS.indexOf(v) !== -1) {
+            paint('bad', '이미 사용 중인 닉네임입니다');
+            btn.disabled = false;
+            input.focus(); input.select();
+          } else {
+            // 통과하면 이 단계는 접히고 다음 칸이 열립니다.
+            s.nick = v;
+            render();
+          }
+        }, 700);
+      });
+
+      btn.disabled = true;
+      paint('', '');
+    }
+
+    // ── 모드 + 그에 따라 열리는 것 ──────────────────────
+    function renderStep2() {
+      var step = $('step2'), body = $('step2Body');
+      step.className = 'step' + (s.nick ? '' : ' is-locked');
+
+      if (!s.nick) {
+        body.innerHTML =
+          '<div class="modes">' + modeBox('l', null) + '</div>' +
+          '<p class="hint">닉네임을 먼저 정해주세요</p>';
+        return;
+      }
+
+      body.innerHTML = '<div class="modes" id="modes">' + modeBox('live', s.mode) + '</div>' +
+                       '<div id="branch"></div>';
+
+      [].slice.call(document.querySelectorAll('#modes .mode-input')).forEach(function (input) {
+        input.addEventListener('change', function () {
+          clearAll();
+          // 모드를 바꾸면 그 아래에서 하던 건 지웁니다.
+          // 안 그러면 랜덤 화면 밑에 아까 치던 방코드가 남습니다.
+          s.mode = input.value; s.room = null; s.foe = null; s.phase = null;
+          render();
+        });
+      });
+
+      renderBranch();
+    }
+
+    function modeBox(name, picked) {
+      function one(value, pics, label, desc) {
+        return '<label class="mode">' +
+          '<input class="mode-input" type="radio" name="' + name + '" value="' + value + '"' +
+            (picked === value ? ' checked' : '') + (name === 'l' ? ' disabled' : '') + ' />' +
+          '<div class="mode-pics">' + pics + '</div>' +
+          '<div class="mode-name">' + label + '</div>' +
+          '<div class="mode-desc">' + desc + '</div>' +
+        '</label>';
+      }
+      var meTile = '<i class="mode-pic">' + (s.nick ? s.nick.charAt(0) : '나') + '</i>';
+      return one('friend', meTile + '<i class="mode-pic">엘</i>', '친구', '코드로 만나기') +
+             one('random', meTile + '<i class="mode-pic is-any">?</i>', '랜덤', '아무나 만나기');
+    }
+
+    // ── 모드에 따라 갈리는 부분 ────────────────────────
+    function renderBranch() {
+      var box = $('branch');
+      if (!box) return;
+
+      if (!s.mode) { box.innerHTML = ''; return; }
+      if (s.mode === 'friend') return renderFriend(box);
+      return renderRandom(box);
+    }
+
+    // ③ 방 만들기 + ② 코드 입력 — 친구 모드는 두 갈래입니다.
+    function renderFriend(box) {
+
+      // 상대가 들어왔으면 자리표만 남깁니다.
+      if (s.foe) {
+        box.innerHTML = '<div class="split">' + versus(s.foe, 'found') + '</div>';
+        return;
+      }
+
+      // 방을 만들고 기다리는 중
+      if (s.phase === 'hosting') {
+        box.innerHTML =
+          '<div class="split">' +
+            '<p class="split-label">친구에게 알려줄 코드</p>' +
+            '<div class="code-show">' + s.room.split('').map(function (c) {
+              return '<div class="show-cell">' + c + '</div>';
+            }).join('') + '</div>' +
+            '<div class="share-row">' +
+              '<button class="btn-copy" id="copy" type="button">코드 복사</button>' +
+              '<button class="btn-cancel" id="dropRoom" type="button">방 없애기</button>' +
+            '</div>' +
+            versus(null, 'empty') +
+            '<p class="hint is-wait is-mid"><span class="waiting"></span>친구가 들어오길 기다리는 중…</p>' +
+          '</div>';
+
+        $('copy').addEventListener('click', function () {
+          try { navigator.clipboard.writeText(s.room); } catch (e) {}
+          var b = $('copy');
+          b.className = 'btn-copy is-done'; b.textContent = '복사했어요';
+          later(function () {
+            if ($('copy')) { $('copy').className = 'btn-copy'; $('copy').textContent = '코드 복사'; }
+          }, 2000);
+        });
+
+        $('dropRoom').addEventListener('click', function () {
+          clearAll();
+          s.room = null; s.phase = null;
+          render();
+        });
+        return;
+      }
+
+      // 방을 만드는 중
+      if (s.phase === 'making') {
+        box.innerHTML =
+          '<div class="split">' +
+            '<button class="btn-wide" type="button" disabled>만드는 중…</button>' +
+            '<p class="hint is-wait is-mid"><span class="waiting"></span>방을 만들고 있어요</p>' +
+          '</div>';
+        return;
+      }
+
+      // 아직 아무것도 안 함 — 두 갈래를 나란히 보여줍니다.
+      box.innerHTML =
+        '<div class="split">' +
+          '<p class="split-label">친구가 준 코드가 있다면</p>' +
+          '<div class="entry-row">' +
+            '<div class="code-row" id="codeRow">' +
+              cells() +
+            '</div>' +
+            '<button class="btn-enter" id="enter" type="button" disabled>입장</button>' +
+          '</div>' +
+          '<p class="hint" id="codeHint"></p>' +
+          '<p class="or">또는</p>' +
+          '<button class="btn-wide" id="make" type="button">방 만들기</button>' +
+          '<p class="hint is-mid">방을 만들면 네 글자 코드가 나와요</p>' +
+        '</div>';
+
+      wireCode();
+
+      $('make').addEventListener('click', function () {
+        s.phase = 'making';
+        render();
+        later(function () {
+          s.room = newCode(); s.phase = 'hosting';
+          render();
+          // 친구가 들어옵니다. (진짜로는 언제 올지 모릅니다)
+          later(function () { s.foe = '엘리'; render(); }, 4000);
+        }, 900);
+      });
+    }
+
+    function cells() {
+      var out = '';
+      for (var i = 0; i < CODE_LEN; i++) {
+        out += '<input class="code-cell" type="text" maxlength="1" autocomplete="off" ' +
+               'aria-label="방코드 ' + (i + 1) + '번째 글자" />';
+      }
+      return out;
+    }
+
+    function wireCode() {
+      var row   = $('codeRow');
+      var cs    = [].slice.call(row.querySelectorAll('.code-cell'));
+      var enter = $('enter');
+      var hint  = $('codeHint');
+      var OK    = /[A-HJ-NP-Z2-9]/;
+
+      function code() { return cs.map(function (c) { return c.value; }).join(''); }
+
+      function refresh() {
+        enter.disabled = code().length < CODE_LEN;
+        row.className = 'code-row';
+        hint.className = 'hint'; hint.textContent = '';
+      }
+
+      cs.forEach(function (cell, i) {
+        cell.addEventListener('input', function () {
+          var ch = cell.value.toUpperCase().slice(-1);
+          cell.value = OK.test(ch) ? ch : '';
+          if (cell.value && i < CODE_LEN - 1) cs[i + 1].focus();
+          refresh();
+        });
+        cell.addEventListener('keydown', function (e) {
+          if (e.key === 'Backspace' && !cell.value && i > 0) cs[i - 1].focus();
+          if (e.key === 'Enter' && !enter.disabled) enter.click();
+        });
+        cell.addEventListener('paste', function (e) {
+          e.preventDefault();
+          var t = (e.clipboardData || window.clipboardData).getData('text').toUpperCase()
+                    .split('').filter(function (c) { return OK.test(c); }).join('').slice(0, CODE_LEN);
+          cs.forEach(function (c, k) { c.value = t[k] || ''; });
+          cs[Math.min(t.length, CODE_LEN - 1)].focus();
+          refresh();
+        });
+      });
+
+      enter.addEventListener('click', function () {
+        var typed = code();
+        enter.disabled = true; enter.textContent = '확인 중…';
+        cs.forEach(function (c) { c.disabled = true; });
+        hint.className = 'hint is-wait';
+        hint.innerHTML = '';
+        hint.appendChild(el('span', 'waiting'));
+        hint.appendChild(document.createTextNode(' 그런 방이 있는지 알아보는 중이에요'));
+
+        later(function () {
+          if (typed === LIVE_ROOM) {
+            s.room = typed; s.foe = '엘리';
+            render();
+            return;
+          }
+          // 없는 방 — 흔들고 비우고 첫 칸으로 돌려보냅니다.
+          cs.forEach(function (c) { c.disabled = false; });
+          enter.textContent = '입장';
+          row.className = 'code-row is-bad is-shake';
+          hint.className = 'hint is-bad';
+          hint.innerHTML = '';
+          hint.appendChild(el('span', 'hint-icon', '!'));
+          hint.appendChild(document.createTextNode(' 그런 방이 없어요. 코드를 다시 확인해 주세요'));
+          later(function () {
+            cs.forEach(function (c) { c.value = ''; });
+            row.className = 'code-row';
+            cs[0].focus();
+          }, 600);
+        }, 700);
+      });
+    }
+
+    // ④ 랜덤 매칭
+    function renderRandom(box) {
+      if (s.foe) {
+        box.innerHTML = '<div class="split">' + versus(s.foe, 'found') + '</div>';
+        return;
+      }
+
+      if (s.phase === 'hunting') {
+        box.innerHTML =
+          '<div class="split">' +
+            versus(null, 'hunting') +
+            '<p class="elapsed" id="clock">00:00</p>' +
+            '<button class="btn-wide is-quiet" id="stopMatch" type="button">취소</button>' +
+            '<p class="queue"><i class="queue-dot"></i>지금 <b>' + (QUEUE - 1) + '</b>명이 상대를 찾고 있어요</p>' +
+          '</div>';
+
+        var n = 0, clockEl = $('clock');
+        var tileEl = document.querySelector('.player.is-hunting .player-tile');
+        var tick = setInterval(function () {
+          n++;
+          if (clockEl) clockEl.textContent = mmss(n);
+          if (tileEl) tileEl.textContent = LETTERS[Math.floor(Math.random() * 24)];
+        }, 1000);
+        timers.push(tick);   // 상태가 바뀌면 같이 멈춥니다.
+
+        $('stopMatch').addEventListener('click', function () {
+          clearAll(); clearInterval(tick);
+          s.phase = null;
+          render();
+          var h = document.querySelector('#branch .hint');
+          if (h) h.textContent = '매칭을 멈췄어요';
+        });
+        return;
+      }
+
+      box.innerHTML =
+        '<div class="split">' +
+          versus(null, 'empty') +
+          '<button class="btn-wide" id="startMatch" type="button">매칭 시작</button>' +
+          '<p class="queue"><i class="queue-dot"></i>지금 <b>' + QUEUE + '</b>명이 상대를 찾고 있어요</p>' +
+          '<p class="hint is-mid"></p>' +
+        '</div>';
+
+      $('startMatch').addEventListener('click', function () {
+        s.phase = 'hunting';
+        render();
+        later(function () { s.foe = '은우'; s.phase = null; render(); }, 6000);
+      });
+    }
+
+    // 두 사람 자리 — 친구·랜덤이 같은 모양을 씁니다.
+    function versus(foe, kind) {
+      var right = foe
+        ? '<div class="player is-found"><div class="player-tile">' + esc(foe.charAt(0)) + '</div>' +
+          '<div class="player-name">' + esc(foe) + '</div><div class="player-role">상대</div></div>'
+        : '<div class="player is-empty' + (kind === 'hunting' ? ' is-hunting' : '') + '">' +
+          '<div class="player-tile">' + (kind === 'hunting' ? 'K' : '?') + '</div>' +
+          '<div class="player-name">' + (kind === 'hunting' ? '찾는 중…' : '비어 있음') + '</div>' +
+          '<div class="player-role">상대</div></div>';
+
+      return '<div class="versus">' +
+        '<div class="player"><div class="player-tile">' + esc(s.nick.charAt(0)) + '</div>' +
+        '<div class="player-name">' + esc(s.nick) + '</div><div class="player-role">나</div></div>' +
+        '<div class="vs">VS</div>' + right + '</div>';
+    }
+
+    // ── ③ 시작 ─────────────────────────────────────────
+    function renderStep3() {
+      var step = $('step3'), body = $('step3Body');
+      var ready = !!s.foe;
+      step.className = 'step' + (ready ? '' : ' is-locked');
+
+      if (!ready) {
+        s.leaving = false;
+        body.innerHTML =
+          '<div class="leaving is-idle">' +
+            '<p class="hint is-mid">상대가 정해지면 자동으로 시작됩니다</p>' +
+          '</div>';
+        return;
+      }
+
+      body.innerHTML =
+        '<div class="leaving">' +
+          '<p class="hint is-ok is-mid"><span class="hint-icon">✓</span> ' +
+            esc(s.foe) + ' 님과 준비됐어요' +
+          '</p>' +
+        '</div>';
+
+      // 통과 표시를 잠깐 보여준 뒤 스스로 넘어갑니다.
+      // 곧바로 넘기면 사용자는 방금 뭐가 일어났는지 모른 채 화면이 튄 것처럼 느낍니다.
+      if (s.leaving) return;
+      s.leaving = true;
+
+      later(function () {
+        var box = $('step3Body');
+        if (!box || !s.foe) return;
+        box.innerHTML = '';
+        var wrap = el('div', 'leaving');
+        var line = el('p', 'hint is-wait is-mid');
+        line.appendChild(el('span', 'waiting'));
+        line.appendChild(document.createTextNode(' 게임 화면으로 넘어갑니다…'));
+        wrap.appendChild(line);
+        box.appendChild(wrap);
+      }, 1400);
+    }
+
+    // ── 잡일 ───────────────────────────────────────────
+    function el(tag, cls, text) {
+      var e = document.createElement(tag);
+      e.className = cls;
+      if (text) e.textContent = text;
+      return e;
+    }
+
+    function esc(v) {
+      var d = document.createElement('div');
+      d.textContent = v;
+      return d.innerHTML;
+    }
+
+    function mmss(t) {
+      var m = Math.floor(t / 60), x = t % 60;
+      return (m < 10 ? '0' + m : m) + ':' + (x < 10 ? '0' + x : x);
+    }
+
+    function newCode() {
+      var out = '';
+      for (var i = 0; i < CODE_LEN; i++) out += LETTERS[Math.floor(Math.random() * LETTERS.length)];
+      return out;
+    }
+
+    $('reset').addEventListener('click', function () {
+      clearAll();
+      s = { nick: null, mode: null, room: null, foe: null, phase: null, leaving: false };
+      render();
+    });
+
+    render();
+  })();
+</script>
