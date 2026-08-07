@@ -1,0 +1,440 @@
+<!-- @dsCard group="대기실 (Lobby)" viewport="1280x1850" name="방 생성 + 코드 공유" subtitle="상태 6종 · 눌러보기 · 규칙" -->
+<!--
+  대기실 ③ — 친구모드 · 방 만들기 + 코드 공유 (호스트 쪽)
+  화면(모양)만 담은 파일입니다. 서버를 부르거나 데이터를 저장하지 않습니다.
+  ②는 코드를 "넣는" 화면, 여기는 코드를 "받아서 보여주는" 화면입니다.
+-->
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>방 생성 + 코드 공유 — 스크래블 대기실</title>
+<link rel="stylesheet" href="../../styles.css" />
+<style>
+*{box-sizing:border-box}
+body{margin:0;padding:0;background:var(--paper);color:var(--ink);font-family:var(--font-text);line-height:1.6;-webkit-font-smoothing:antialiased}
+.board{min-height:100vh;padding:40px 28px 72px}
+.wrap{max-width:1000px;margin:0 auto}
+
+/* ── 문서 머리 ─────────────────────────────────────────── */
+.doc-head{padding-bottom:34px;border-bottom:2px solid var(--rule)}
+.tiles{display:flex;flex-wrap:wrap;gap:0;margin:0 0 22px}
+.tile{width:var(--cell);height:var(--cell);display:grid;place-items:center;background:var(--theme);border:1px solid var(--rule);margin:-1px 0 0 -1px;font-family:var(--font-display);font-weight:700;font-size:20px;color:var(--ink)}
+.tile.is-gap{background:transparent;border-color:transparent}
+.crumb{margin:0 0 10px;font-family:var(--font-mono);font-size:11px;letter-spacing:var(--track-caps);text-transform:uppercase;color:var(--ink-soft)}
+.doc-head h1{margin:0 0 12px;font-family:var(--font-display);font-weight:700;font-size:34px;letter-spacing:-.01em}
+.doc-head p{margin:0;max-width:58ch;color:var(--ink-soft);font-size:15px;text-wrap:pretty}
+
+/* ── 구역 ──────────────────────────────────────────────── */
+.section{margin-top:56px}
+.section>h2{display:inline-block;margin:0 0 10px;padding:5px 12px;background:var(--theme);border:1px solid var(--rule);font-family:var(--font-display);font-size:12px;font-weight:700;letter-spacing:var(--track-caps);text-transform:uppercase}
+.section>.lede{margin:0 0 26px;max-width:62ch;font-size:15px;color:var(--ink-soft);text-wrap:pretty}
+
+/* ── 상태 카드 격자 ────────────────────────────────────── */
+.grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(360px,1fr));gap:0}
+.case{margin:-1px 0 0 -1px;padding:22px;background:var(--paper-2);border:1px solid var(--rule)}
+.case.is-extra{background:repeating-linear-gradient(-45deg,var(--paper-2),var(--paper-2) 9px,var(--paper) 9px,var(--paper) 18px)}
+.case-name{display:flex;align-items:center;gap:9px;margin:0 0 20px;font-family:var(--font-mono);font-size:11px;letter-spacing:var(--track-caps);text-transform:uppercase;color:var(--ink-soft)}
+.mark{width:12px;height:12px;flex:none;border:1px solid var(--rule);background:transparent}
+.mark.is-ok{background:var(--ok)}
+.mark.is-bad{background:var(--bad)}
+.mark.is-wait{background:var(--theme)}
+.case-note{margin:18px 0 0;padding-top:15px;border-top:1px solid var(--grid);font-size:13px;color:var(--ink-soft);text-wrap:pretty}
+.tag{display:inline-block;margin-left:auto;padding:2px 7px;background:var(--theme-tint);border:1px solid var(--rule);font-size:10px;letter-spacing:var(--track-caps)}
+
+/* ── ⬇ 여기부터가 실제 컴포넌트입니다 ─────────────────── */
+.field-label{display:block;margin-bottom:9px;font-family:var(--font-mono);font-size:11px;letter-spacing:var(--track-caps);text-transform:uppercase;color:var(--ink)}
+
+/* 방 만들기 — 큰 버튼 하나. 이 화면에서 할 일이 하나뿐일 때 씁니다. */
+.btn-make{width:100%;height:58px;padding:0 22px;
+  font-family:var(--font-display);font-size:13px;font-weight:700;letter-spacing:var(--track-caps);text-transform:uppercase;
+  color:var(--ink);background:var(--theme);border:1.5px solid var(--rule);border-radius:0;cursor:pointer;transition:background .15s}
+.btn-make:hover:not(:disabled){background:var(--theme-deep)}
+.btn-make:active:not(:disabled){background:var(--theme-deep);box-shadow:inset 0 2px 0 rgba(0,0,0,.14)}
+.btn-make:disabled{cursor:not-allowed;background:transparent;color:var(--ink-faint);border-color:var(--grid)}
+
+/* 발급된 코드 — 읽으라고 보여주는 타일이라 ②의 입력칸보다 훨씬 큽니다. */
+.code-show{display:flex;justify-content:center;margin:0 0 4px}
+.show-cell{width:60px;height:74px;margin-left:-1px;display:grid;place-items:center;
+  background:var(--theme);border:1.5px solid var(--rule);
+  font-family:var(--font-display);font-size:32px;font-weight:700;color:var(--ink)}
+.show-cell:first-child{margin-left:0}
+
+.share-row{display:flex;align-items:stretch;margin-top:14px}
+.btn-copy{flex:1;height:44px;
+  font-family:var(--font-display);font-size:11px;font-weight:700;letter-spacing:var(--track-caps);text-transform:uppercase;
+  color:var(--ink);background:transparent;border:1.5px solid var(--rule);border-radius:0;cursor:pointer;transition:background .15s}
+.btn-copy:hover{background:var(--theme-tint)}
+.btn-copy.is-done{background:var(--ok-tint);border-color:var(--ok);color:var(--ok)}
+
+.btn-cancel{flex:none;margin-left:-1px;height:44px;padding:0 16px;
+  font-family:var(--font-display);font-size:11px;font-weight:700;letter-spacing:var(--track-caps);text-transform:uppercase;
+  color:var(--ink-soft);background:transparent;border:1.5px solid var(--grid);border-radius:0;cursor:pointer;transition:color .15s,border-color .15s}
+.btn-cancel:hover{color:var(--bad);border-color:var(--bad)}
+
+/* 누가 들어와 있는지 — 두 칸짜리 자리표 */
+.seats{display:flex;align-items:center;gap:0;margin-top:18px;padding-top:16px;border-top:1px solid var(--grid)}
+.seat{flex:1;height:38px;margin-left:-1px;display:flex;align-items:center;gap:8px;padding:0 12px;
+  background:#fff;border:1px solid var(--rule);font-size:13px}
+.seat:first-child{margin-left:0}
+.seat.is-empty{background:transparent;border-style:dashed;border-color:var(--grid);color:var(--ink-faint)}
+.seat.is-filled{background:var(--ok-tint)}
+.seat-chip{flex:none;width:16px;height:16px;background:var(--theme);border:1px solid var(--rule)}
+.seat.is-empty .seat-chip{background:transparent;border-style:dashed;border-color:var(--grid)}
+.seat.is-filled .seat-chip{background:var(--ok)}
+
+.hint{display:flex;align-items:center;gap:7px;margin:12px 0 0;min-height:22px;font-size:13.5px;color:var(--ink-soft)}
+.hint.is-ok{color:var(--ok)}
+.hint.is-bad{color:var(--bad)}
+.hint.is-wait{color:var(--ink)}
+.hint-icon{flex:none;width:18px;height:18px;display:grid;place-items:center;font-family:var(--font-display);font-size:11px;font-weight:700;color:#fff}
+.is-ok>.hint-icon{background:var(--ok)}
+.is-bad>.hint-icon{background:var(--bad)}
+.waiting{flex:none;width:14px;height:14px;background:var(--theme);border:1px solid var(--rule);animation:flip 1s steps(2,end) infinite}
+@keyframes flip{50%{background:transparent}}
+@media (prefers-reduced-motion:reduce){.waiting{animation-duration:3s}}
+/* ── ⬆ 컴포넌트 끝 ────────────────────────────────────── */
+
+/* ── 눌러보는 미리보기 ─────────────────────────────────── */
+.play{padding:30px;background:var(--paper-2);border:1.5px solid var(--rule)}
+.play-stage{max-width:380px}
+.switch{display:flex;flex-wrap:wrap;gap:0;margin-top:28px;padding-top:22px;border-top:1px solid var(--grid)}
+.switch-label{width:100%;margin:0 0 10px;font-family:var(--font-mono);font-size:11px;letter-spacing:var(--track-caps);text-transform:uppercase;color:var(--ink-soft)}
+.chip{margin:0 0 0 -1px;padding:9px 14px;font-family:var(--font-display);font-size:11px;font-weight:700;letter-spacing:var(--track-caps);text-transform:uppercase;color:var(--ink);background:transparent;border:1px solid var(--rule);border-radius:0;cursor:pointer;transition:background .15s}
+.chip:hover{background:var(--theme-tint)}
+.chip[aria-pressed="true"]{background:var(--theme)}
+
+/* ── 규칙 표 ───────────────────────────────────────────── */
+table{width:100%;border-collapse:collapse;font-size:14px;background:var(--paper-2)}
+th,td{text-align:left;padding:13px 15px;border:1px solid var(--grid);vertical-align:top}
+th{background:var(--theme-tint);border-color:var(--rule);font-family:var(--font-mono);font-size:11px;letter-spacing:var(--track-caps);text-transform:uppercase;font-weight:400;color:var(--ink)}
+td:first-child{white-space:nowrap;font-weight:600}
+.table-scroll{overflow-x:auto;border:1.5px solid var(--rule)}
+code{padding:1px 6px;background:var(--theme-tint);font-family:var(--font-mono);font-size:.88em}
+.colophon{margin:48px 0 0;text-align:center;font-family:var(--font-mono);font-size:10px;letter-spacing:var(--track-caps);text-transform:uppercase;color:var(--ink-faint)}
+</style>
+
+<div class="board">
+<div class="wrap">
+
+  <header class="doc-head">
+    <div class="tiles" aria-hidden="true">
+      <div class="tile">N</div><div class="tile">E</div><div class="tile">W</div>
+      <div class="tile is-gap"></div>
+      <div class="tile">R</div><div class="tile">O</div><div class="tile">O</div><div class="tile">M</div>
+    </div>
+    <p class="crumb">대기실 · 기능 ③ · 친구모드 (호스트)</p>
+    <h1>방 생성 + 코드 공유</h1>
+    <p>
+      ②와 짝이 되는 반대쪽입니다. ②가 코드를 <b>넣는</b> 화면이라면 여기는 코드를 <b>받아서 보여주는</b> 화면입니다.
+      그래서 같은 네 글자인데 생김새가 다릅니다 — 저쪽은 흰 입력칸, 여기는 크게 읽히는 타일.
+      그리고 이 화면에는 앞의 둘에 없던 것이 있습니다. <b>끝나지 않고 기다리는 시간</b>입니다.
+    </p>
+  </header>
+
+  <!-- ── 상태 ────────────────────────────────────────────── -->
+  <section class="section">
+    <h2>상태 6종</h2>
+    <p class="lede">
+      만들기 전 → 만드는 중 → 코드 받음(기다림) → 복사함 → 친구 들어옴 → 실패.
+      가운데 <b>3번이 이 화면의 본체</b>이고, 사용자가 가장 오래 머무는 곳입니다.
+    </p>
+
+    <div class="grid">
+
+      <!-- 1 -->
+      <article class="case">
+        <p class="case-name"><i class="mark"></i>1 · 만들기 전</p>
+        <button class="btn-make" type="button" disabled>방 만들기</button>
+        <p class="hint">방을 만들면 네 글자 코드가 나와요</p>
+        <p class="case-note">
+          할 일이 하나뿐이라 버튼도 하나입니다. 넓게 씁니다.
+          <b>버튼 아래 한 줄이 중요합니다</b> — 누르면 무슨 일이 생기는지 미리 알려주면
+          사람들은 훨씬 편하게 누릅니다.
+        </p>
+      </article>
+
+      <!-- 2 -->
+      <article class="case">
+        <p class="case-name"><i class="mark is-wait"></i>2 · 만드는 중</p>
+        <button class="btn-make" type="button" disabled>만드는 중…</button>
+        <p class="hint is-wait"><span class="waiting"></span>방을 만들고 있어요</p>
+        <p class="case-note">
+          아주 짧게 지나갑니다. 그래도 <b>버튼을 잠가야</b> 합니다.
+          두 번 누르면 방이 두 개 생기고, 그중 하나는 아무도 안 들어오는
+          유령 방으로 남습니다.
+        </p>
+      </article>
+
+      <!-- 3 -->
+      <article class="case">
+        <p class="case-name"><i class="mark is-wait"></i>3 · 코드 받음 · 기다리는 중</p>
+        <label class="field-label">친구에게 알려줄 코드</label>
+        <div class="code-show">
+          <div class="show-cell">A</div><div class="show-cell">7</div>
+          <div class="show-cell">K</div><div class="show-cell">2</div>
+        </div>
+        <div class="share-row">
+          <button class="btn-copy" type="button" disabled>코드 복사</button>
+          <button class="btn-cancel" type="button" disabled>방 없애기</button>
+        </div>
+        <div class="seats">
+          <div class="seat is-filled"><i class="seat-chip"></i>수진 (나)</div>
+          <div class="seat is-empty"><i class="seat-chip"></i>비어 있음</div>
+        </div>
+        <p class="hint is-wait"><span class="waiting"></span>친구가 들어오길 기다리는 중…</p>
+        <p class="case-note">
+          <b>이 화면의 본체입니다.</b> 코드를 크게 키운 이유는 하나뿐입니다 —
+          옆에 앉은 친구에게 화면을 돌려 보여주거나, 전화로 불러줘야 하기 때문입니다.
+          자리표 두 칸이 <b>몇 명이 필요한지</b>를 말없이 알려줍니다.
+        </p>
+      </article>
+
+      <!-- 4 -->
+      <article class="case">
+        <p class="case-name"><i class="mark is-ok"></i>4 · 복사함</p>
+        <label class="field-label">친구에게 알려줄 코드</label>
+        <div class="code-show">
+          <div class="show-cell">A</div><div class="show-cell">7</div>
+          <div class="show-cell">K</div><div class="show-cell">2</div>
+        </div>
+        <div class="share-row">
+          <button class="btn-copy is-done" type="button" disabled>복사했어요</button>
+          <button class="btn-cancel" type="button" disabled>방 없애기</button>
+        </div>
+        <div class="seats">
+          <div class="seat is-filled"><i class="seat-chip"></i>수진 (나)</div>
+          <div class="seat is-empty"><i class="seat-chip"></i>비어 있음</div>
+        </div>
+        <p class="hint is-wait"><span class="waiting"></span>친구가 들어오길 기다리는 중…</p>
+        <p class="case-note">
+          버튼 글자가 잠깐 바뀝니다. 복사는 <b>눈에 아무 흔적을 안 남기는 동작</b>이라,
+          화면이 대신 "됐다"고 말해주지 않으면 사용자는 눌렸는지 모르고 또 누릅니다.
+          몇 초 뒤 원래 글자로 돌아옵니다.
+        </p>
+      </article>
+
+      <!-- 5 -->
+      <article class="case">
+        <p class="case-name"><i class="mark is-ok"></i>5 · 친구 들어옴</p>
+        <label class="field-label">친구에게 알려줄 코드</label>
+        <div class="code-show">
+          <div class="show-cell">A</div><div class="show-cell">7</div>
+          <div class="show-cell">K</div><div class="show-cell">2</div>
+        </div>
+        <div class="seats">
+          <div class="seat is-filled"><i class="seat-chip"></i>수진 (나)</div>
+          <div class="seat is-filled"><i class="seat-chip"></i>엘리</div>
+        </div>
+        <p class="hint is-ok"><span class="hint-icon">✓</span>엘리 님이 들어왔어요. 곧 시작합니다…</p>
+        <p class="case-note">
+          빈 칸에 이름이 들어찹니다. <b>코드 복사·방 없애기 버튼은 사라집니다</b> —
+          이제 할 일이 아니니까요. 곧 게임 화면으로 넘어갑니다.
+        </p>
+      </article>
+
+      <!-- 6 -->
+      <article class="case is-extra">
+        <p class="case-name"><i class="mark is-bad"></i>6 · 못 만들었음 <span class="tag">제안</span></p>
+        <button class="btn-make" type="button" disabled>다시 시도</button>
+        <p class="hint is-bad"><span class="hint-icon">!</span>방을 만들지 못했어요. 잠시 후 다시 눌러주세요</p>
+        <p class="case-note">
+          <b>기획에 없던 칸입니다.</b> 서버가 잠깐 대답을 못 하는 경우입니다.
+          이걸 안 그려두면 버튼을 눌렀는데 <b>아무 일도 안 일어난 화면</b>이 남고,
+          사용자는 자기가 뭘 잘못했는지 찾게 됩니다. 필요 없으면 빼겠습니다.
+        </p>
+      </article>
+
+    </div>
+  </section>
+
+  <!-- ── 눌러보기 ────────────────────────────────────────── -->
+  <section class="section">
+    <h2>눌러보기</h2>
+    <p class="lede">
+      [방 만들기]를 눌러보세요 — 만드는 중을 거쳐 코드가 나옵니다. 복사 버튼도 눌러보세요.
+      <b>모양만 확인하는 미리보기입니다</b> — 어디에도 연결되어 있지 않고, 코드는 그때그때 아무 글자나 만듭니다.
+    </p>
+
+    <div class="play">
+      <div class="play-stage" id="stage"></div>
+
+      <div class="switch">
+        <p class="switch-label">상태 바꿔보기</p>
+        <button class="chip" type="button" data-state="before" aria-pressed="true">만들기 전</button>
+        <button class="chip" type="button" data-state="making" aria-pressed="false">만드는 중</button>
+        <button class="chip" type="button" data-state="waiting" aria-pressed="false">기다리는 중</button>
+        <button class="chip" type="button" data-state="joined" aria-pressed="false">친구 들어옴</button>
+        <button class="chip" type="button" data-state="failed" aria-pressed="false">못 만들었음</button>
+      </div>
+    </div>
+  </section>
+
+  <!-- ── 규칙 ────────────────────────────────────────────── -->
+  <section class="section">
+    <h2>정해둔 규칙</h2>
+    <p class="lede">숫자와 문구는 여기에 적힌 대로 화면에 박아둡니다. 바꾸려면 이 표부터 고칩니다.</p>
+
+    <div class="table-scroll">
+      <table>
+        <thead>
+          <tr><th>항목</th><th>값</th><th>왜</th></tr>
+        </thead>
+        <tbody>
+          <tr><td>코드 형식</td><td>②와 똑같이 4자</td><td>여기서 나온 코드를 저쪽에 그대로 넣습니다. 형식이 다르면 안 됩니다.</td></tr>
+          <tr><td>코드 타일 크기</td><td><code>60 × 74px</code></td><td>②의 입력칸(<code>48 × 58px</code>)보다 큽니다. 이건 <b>치는 게 아니라 읽는 것</b>이라서입니다.</td></tr>
+          <tr><td>만드는 동안</td><td>버튼 잠금</td><td>두 번 누르면 유령 방이 하나 더 생깁니다.</td></tr>
+          <tr><td>복사 표시</td><td>버튼 글자가 2초간 바뀜</td><td>복사는 눈에 흔적이 안 남는 동작이라 화면이 대신 말해줘야 합니다.</td></tr>
+          <tr><td>자리표</td><td>두 칸 고정</td><td>몇 명이 필요한 게임인지 글로 안 적어도 알 수 있습니다.</td></tr>
+          <tr><td>친구가 들어오면</td><td>복사·없애기 버튼 사라짐</td><td>더 이상 할 일이 아닌 버튼을 남겨두면 눌러보게 됩니다.</td></tr>
+          <tr><td>방 없애기</td><td>기다리는 동안만 보임</td><td>기획에 없던 버튼입니다. 없으면 잘못 만든 방을 끌 방법이 없습니다.</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </section>
+
+  <p class="colophon">Scrabble · Lobby 03</p>
+
+</div>
+</div>
+
+<script>
+  // 미리보기용입니다. 화면이 어떻게 보이는지만 확인하는 코드고,
+  // 실제 기능은 나중에 따로 붙입니다.
+  (function () {
+    var stage = document.getElementById('stage');
+    var chips = document.querySelectorAll('.chip');
+
+    var LETTERS = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';  // O·0·I·1 은 뺍니다
+    var code = 'A7K2';
+    var copied = false;
+    var timer = null;
+
+    // 코드는 눌러볼 때마다 새로 뽑습니다. 매번 같은 코드면
+    // "발급된 것"처럼 안 보이니까요.
+    function newCode() {
+      var out = '';
+      for (var i = 0; i < 4; i++) {
+        out += LETTERS[Math.floor(Math.random() * LETTERS.length)];
+      }
+      return out;
+    }
+
+    function codeTiles() {
+      return '<div class="code-show">' +
+        code.split('').map(function (c) {
+          return '<div class="show-cell">' + c + '</div>';
+        }).join('') +
+        '</div>';
+    }
+
+    function seats(friend) {
+      return '<div class="seats">' +
+        '<div class="seat is-filled"><i class="seat-chip"></i>수진 (나)</div>' +
+        (friend
+          ? '<div class="seat is-filled"><i class="seat-chip"></i>' + friend + '</div>'
+          : '<div class="seat is-empty"><i class="seat-chip"></i>비어 있음</div>') +
+        '</div>';
+    }
+
+    function render(state) {
+      if (state === 'before') {
+        stage.innerHTML =
+          '<button class="btn-make" id="make" type="button">방 만들기</button>' +
+          '<p class="hint">방을 만들면 네 글자 코드가 나와요</p>';
+
+      } else if (state === 'making') {
+        stage.innerHTML =
+          '<button class="btn-make" type="button" disabled>만드는 중…</button>' +
+          '<p class="hint is-wait"><span class="waiting"></span>방을 만들고 있어요</p>';
+
+      } else if (state === 'waiting') {
+        stage.innerHTML =
+          '<label class="field-label">친구에게 알려줄 코드</label>' +
+          codeTiles() +
+          '<div class="share-row">' +
+            '<button class="btn-copy' + (copied ? ' is-done' : '') + '" id="copy" type="button">' +
+              (copied ? '복사했어요' : '코드 복사') +
+            '</button>' +
+            '<button class="btn-cancel" id="cancel" type="button">방 없애기</button>' +
+          '</div>' +
+          seats(null) +
+          '<p class="hint is-wait"><span class="waiting"></span>친구가 들어오길 기다리는 중…</p>';
+
+      } else if (state === 'joined') {
+        stage.innerHTML =
+          '<label class="field-label">친구에게 알려줄 코드</label>' +
+          codeTiles() +
+          seats('엘리') +
+          '<p class="hint is-ok"><span class="hint-icon">✓</span>엘리 님이 들어왔어요. 곧 시작합니다…</p>';
+
+      } else if (state === 'failed') {
+        stage.innerHTML =
+          '<button class="btn-make" id="make" type="button">다시 시도</button>' +
+          '<p class="hint is-bad"><span class="hint-icon">!</span>방을 만들지 못했어요. 잠시 후 다시 눌러주세요</p>';
+      }
+
+      wire(state);
+    }
+
+    // 새로 그린 버튼에 다시 동작을 붙입니다.
+    function wire(state) {
+      var make = document.getElementById('make');
+      if (make) {
+        make.addEventListener('click', function () {
+          press('making');
+          render('making');
+          // 만드는 중 → 잠시 뒤 코드가 나옵니다.
+          clearTimeout(timer);
+          timer = setTimeout(function () {
+            code = newCode();
+            copied = false;
+            press('waiting');
+            render('waiting');
+          }, 900);
+        });
+      }
+
+      var copy = document.getElementById('copy');
+      if (copy) {
+        copy.addEventListener('click', function () {
+          // 미리보기 안에서는 복사가 막혀 있을 수 있습니다.
+          // 그래도 화면 반응은 똑같이 보여줍니다.
+          try { navigator.clipboard.writeText(code); } catch (e) {}
+          copied = true;
+          render('waiting');
+          clearTimeout(timer);
+          timer = setTimeout(function () {
+            copied = false;
+            render('waiting');
+          }, 2000);
+        });
+      }
+
+      var cancel = document.getElementById('cancel');
+      if (cancel) {
+        cancel.addEventListener('click', function () {
+          clearTimeout(timer);
+          copied = false;
+          press('before');
+          render('before');
+        });
+      }
+    }
+
+    function press(state) {
+      chips.forEach(function (chip) {
+        chip.setAttribute('aria-pressed', String(chip.dataset.state === state));
+      });
+    }
+
+    chips.forEach(function (chip) {
+      chip.addEventListener('click', function () {
+        clearTimeout(timer);
+        copied = false;
+        press(chip.dataset.state);
+        render(chip.dataset.state);
+      });
+    });
+
+    render('before');
+  })();
+</script>
