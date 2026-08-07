@@ -1,0 +1,339 @@
+<!-- @dsCard group="대기실 (Lobby)" viewport="1280x1700" name="닉네임 입력 + 중복확인" subtitle="상태 5종 · 눌러보기 · 규칙" -->
+<!--
+  대기실 ① — 닉네임 입력 + 중복확인
+  화면(모양)만 담은 파일입니다. 서버를 부르거나 데이터를 저장하지 않습니다.
+  무드: 종이 + 타일 + 넓게 벌린 굵은 대문자 (스크래블 보드).
+-->
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>닉네임 입력 + 중복확인 — 스크래블 대기실</title>
+<link rel="stylesheet" href="../../styles.css" />
+<style>
+*{box-sizing:border-box}
+body{margin:0;padding:0;background:var(--paper);color:var(--ink);font-family:var(--font-text);line-height:1.6;-webkit-font-smoothing:antialiased}
+/* 종이 위 격자 — 화면 전체가 스크래블 보드입니다. */
+.board{min-height:100vh;padding:40px 28px 72px}
+.wrap{max-width:1000px;margin:0 auto}
+
+/* ── 문서 머리 ─────────────────────────────────────────── */
+.doc-head{padding-bottom:34px;border-bottom:2px solid var(--rule)}
+.tiles{display:flex;flex-wrap:wrap;gap:0;margin:0 0 22px}
+.tile{width:var(--cell);height:var(--cell);display:grid;place-items:center;background:var(--theme);border:1px solid var(--rule);margin:-1px 0 0 -1px;font-family:var(--font-display);font-weight:700;font-size:20px;color:var(--ink)}
+.tile.is-gap{background:transparent;border-color:transparent}
+.crumb{margin:0 0 10px;font-family:var(--font-mono);font-size:11px;letter-spacing:var(--track-caps);text-transform:uppercase;color:var(--ink-soft)}
+.doc-head h1{margin:0 0 12px;font-family:var(--font-display);font-weight:700;font-size:34px;letter-spacing:-.01em}
+.doc-head p{margin:0;max-width:58ch;color:var(--ink-soft);font-size:15px;text-wrap:pretty}
+
+/* ── 구역 ──────────────────────────────────────────────── */
+.section{margin-top:56px}
+.section>h2{display:inline-block;margin:0 0 10px;padding:5px 12px;background:var(--theme);border:1px solid var(--rule);font-family:var(--font-display);font-size:12px;font-weight:700;letter-spacing:var(--track-caps);text-transform:uppercase}
+.section>.lede{margin:0 0 26px;max-width:62ch;font-size:15px;color:var(--ink-soft);text-wrap:pretty}
+
+/* ── 상태 카드 격자 ────────────────────────────────────── */
+.grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(340px,1fr));gap:0}
+.case{margin:-1px 0 0 -1px;padding:22px;background:var(--paper-2);border:1px solid var(--rule)}
+.case-name{display:flex;align-items:center;gap:9px;margin:0 0 20px;font-family:var(--font-mono);font-size:11px;letter-spacing:var(--track-caps);text-transform:uppercase;color:var(--ink-soft)}
+.mark{width:12px;height:12px;flex:none;border:1px solid var(--rule);background:transparent}
+.mark.is-ok{background:var(--ok)}
+.mark.is-bad{background:var(--bad)}
+.mark.is-wait{background:var(--theme)}
+.case-note{margin:18px 0 0;padding-top:15px;border-top:1px solid var(--grid);font-size:13px;color:var(--ink-soft);text-wrap:pretty}
+
+/* ── ⬇ 여기부터가 실제 컴포넌트입니다 ─────────────────── */
+.field-label{display:block;margin-bottom:9px;font-family:var(--font-mono);font-size:11px;letter-spacing:var(--track-caps);text-transform:uppercase;color:var(--ink)}
+.field-row{display:flex;gap:0;align-items:stretch}
+.field{flex:1;min-width:0;height:48px;margin-right:-1px;padding:0 14px;font:inherit;font-size:16px;color:var(--ink);background:#fff;border:1.5px solid var(--rule);border-radius:0;outline:none;transition:background .15s,box-shadow .15s}
+.field::placeholder{color:var(--ink-faint)}
+.field:focus{box-shadow:inset 0 -3px 0 var(--theme)}
+.field.is-ok{background:var(--ok-tint)}
+.field.is-bad{background:var(--bad-tint)}
+/* 확인 버튼 = 타일 한 칸 */
+.btn-check{flex:none;height:48px;padding:0 20px;font-family:var(--font-display);font-size:12px;font-weight:700;letter-spacing:var(--track-caps);text-transform:uppercase;white-space:nowrap;color:var(--ink);background:var(--theme);border:1.5px solid var(--rule);border-radius:0;cursor:pointer;transition:background .15s}
+.btn-check:hover:not(:disabled){background:var(--theme-deep)}
+.btn-check:active:not(:disabled){background:var(--theme-deep);box-shadow:inset 0 2px 0 rgba(0,0,0,.14)}
+.btn-check:disabled{cursor:not-allowed;background:transparent;color:var(--ink-faint);border-color:var(--grid)}
+/* 입력칸 아래 한 줄 안내문 — 문구가 없어도 자리를 비워둡니다. */
+.hint{display:flex;align-items:center;gap:7px;margin:12px 0 0;min-height:22px;font-size:13.5px;color:var(--ink-soft)}
+.hint.is-ok{color:var(--ok)}
+.hint.is-bad{color:var(--bad)}
+.hint.is-wait{color:var(--ink)}
+.hint-icon{flex:none;width:18px;height:18px;display:grid;place-items:center;font-family:var(--font-display);font-size:11px;font-weight:700;color:#fff}
+.is-ok>.hint-icon{background:var(--ok)}
+.is-bad>.hint-icon{background:var(--bad)}
+/* 확인 중 — 타일이 뒤집히듯 깜빡입니다. */
+.waiting{flex:none;width:14px;height:14px;background:var(--theme);border:1px solid var(--rule);animation:flip 1s steps(2,end) infinite}
+@keyframes flip{50%{background:transparent}}
+@media (prefers-reduced-motion:reduce){.waiting{animation-duration:3s}}
+.counter{margin-left:auto;font-family:var(--font-mono);font-size:11px;letter-spacing:.06em;font-variant-numeric:tabular-nums;color:var(--ink-faint)}
+.counter.is-full{color:var(--bad)}
+/* ── ⬆ 컴포넌트 끝 ────────────────────────────────────── */
+
+/* ── 눌러보는 미리보기 ─────────────────────────────────── */
+.play{padding:30px;background:var(--paper-2);border:1.5px solid var(--rule)}
+.play-stage{max-width:470px}
+.switch{display:flex;flex-wrap:wrap;gap:0;margin-top:28px;padding-top:22px;border-top:1px solid var(--grid)}
+.switch-label{width:100%;margin:0 0 10px;font-family:var(--font-mono);font-size:11px;letter-spacing:var(--track-caps);text-transform:uppercase;color:var(--ink-soft)}
+.chip{margin:0 0 0 -1px;padding:9px 14px;font-family:var(--font-display);font-size:11px;font-weight:700;letter-spacing:var(--track-caps);text-transform:uppercase;color:var(--ink);background:transparent;border:1px solid var(--rule);border-radius:0;cursor:pointer;transition:background .15s}
+.chip:hover{background:var(--theme-tint)}
+.chip[aria-pressed="true"]{background:var(--theme)}
+
+/* ── 규칙 표 ───────────────────────────────────────────── */
+table{width:100%;border-collapse:collapse;font-size:14px;background:var(--paper-2)}
+th,td{text-align:left;padding:13px 15px;border:1px solid var(--grid);vertical-align:top}
+th{background:var(--theme-tint);border-color:var(--rule);font-family:var(--font-mono);font-size:11px;letter-spacing:var(--track-caps);text-transform:uppercase;font-weight:400;color:var(--ink)}
+td:first-child{white-space:nowrap;font-weight:600}
+.table-scroll{overflow-x:auto;border:1.5px solid var(--rule)}
+code{padding:1px 6px;background:var(--theme-tint);font-family:var(--font-mono);font-size:.88em}
+a{color:var(--ink)}
+a:hover{color:var(--theme-deep)}
+.colophon{margin:48px 0 0;text-align:center;font-family:var(--font-mono);font-size:10px;letter-spacing:var(--track-caps);text-transform:uppercase;color:var(--ink-faint)}
+</style>
+
+<div class="board">
+<div class="wrap">
+
+  <header class="doc-head">
+    <div class="tiles" aria-hidden="true">
+      <div class="tile">N</div><div class="tile">I</div><div class="tile">C</div><div class="tile">K</div>
+      <div class="tile is-gap"></div>
+      <div class="tile">N</div><div class="tile">A</div><div class="tile">M</div><div class="tile">E</div>
+    </div>
+    <p class="crumb">대기실 · 기능 ①</p>
+    <h1>닉네임 입력 + 중복확인</h1>
+    <p>
+      게임에 들어가기 전 가장 먼저 만나는 조각입니다.
+      입력칸 하나와 버튼 하나뿐이지만, 사용자가 겪는 순간은 다섯 가지입니다.
+      다섯 가지를 모두 그려두지 않으면 나중에 화면이 비어 보이거나 덜컥거립니다.
+    </p>
+  </header>
+
+  <!-- ── 상태 5종 ────────────────────────────────────────── -->
+  <section class="section">
+    <h2>상태 5종</h2>
+    <p class="lede">
+      왼쪽 위부터 사용자가 겪는 순서입니다.
+      비어 있음 → 규칙에 안 맞음 → 확인하는 중 → 통과 / 이미 있음.
+    </p>
+
+    <div class="grid">
+
+      <article class="case">
+        <p class="case-name"><i class="mark"></i>1 · 기본 (비어 있음)</p>
+        <label class="field-label" for="s1">닉네임</label>
+        <div class="field-row">
+          <input class="field" id="s1" type="text" placeholder="닉네임을 입력하세요" disabled />
+          <button class="btn-check" type="button" disabled>중복확인</button>
+        </div>
+        <p class="hint"><span class="counter">0 / 12</span></p>
+        <p class="case-note">
+          아무것도 안 쳤으니 확인할 것도 없습니다.
+          <b>버튼은 빈 칸처럼 비워둡니다.</b> 누를 수 없는 버튼을 멀쩡해 보이게 두면
+          눌러보고 아무 일도 안 일어나서 고장으로 오해합니다.
+        </p>
+      </article>
+
+      <article class="case">
+        <p class="case-name"><i class="mark is-bad"></i>2 · 규칙에 안 맞음</p>
+        <label class="field-label" for="s2">닉네임</label>
+        <div class="field-row">
+          <input class="field is-bad" id="s2" type="text" value="수 진" disabled />
+          <button class="btn-check" type="button" disabled>중복확인</button>
+        </div>
+        <p class="hint is-bad">
+          <span class="hint-icon">!</span>
+          공백 없이 1~12자로 입력해 주세요
+          <span class="counter">3 / 12</span>
+        </p>
+        <p class="case-note">
+          띄어쓰기가 들어갔습니다. 이건 <b>화면이 스스로 바로 알 수 있는</b> 잘못이라,
+          버튼을 누르기도 전에 알려줍니다. 기다릴 이유가 없으니까요.
+        </p>
+      </article>
+
+      <article class="case">
+        <p class="case-name"><i class="mark is-wait"></i>3 · 확인하는 중</p>
+        <label class="field-label" for="s3">닉네임</label>
+        <div class="field-row">
+          <input class="field" id="s3" type="text" value="수진" disabled />
+          <button class="btn-check" type="button" disabled>확인 중…</button>
+        </div>
+        <p class="hint is-wait">
+          <span class="waiting"></span>
+          쓸 수 있는 닉네임인지 알아보는 중이에요
+          <span class="counter">2 / 12</span>
+        </p>
+        <p class="case-note">
+          답이 돌아오기까지의 짧은 시간입니다. <b>이 상태를 안 그리면</b>
+          사용자는 버튼을 눌렀는데 아무 반응이 없다고 느끼고 계속 다시 누릅니다.
+        </p>
+      </article>
+
+      <article class="case">
+        <p class="case-name"><i class="mark is-ok"></i>4 · 사용 가능</p>
+        <label class="field-label" for="s4">닉네임</label>
+        <div class="field-row">
+          <input class="field is-ok" id="s4" type="text" value="수진" disabled />
+          <button class="btn-check" type="button" disabled>중복확인</button>
+        </div>
+        <p class="hint is-ok">
+          <span class="hint-icon">✓</span>
+          사용 가능한 닉네임입니다
+          <span class="counter">2 / 12</span>
+        </p>
+        <p class="case-note">
+          통과입니다. 칸 색과 문구가 <b>같이</b> 바뀝니다.
+          색만으로 알리면 색을 구분하기 어려운 사람은 알 수 없으니,
+          문구와 표시를 항상 함께 둡니다.
+        </p>
+      </article>
+
+      <article class="case">
+        <p class="case-name"><i class="mark is-bad"></i>5 · 이미 사용 중</p>
+        <label class="field-label" for="s5">닉네임</label>
+        <div class="field-row">
+          <input class="field is-bad" id="s5" type="text" value="엘리" disabled />
+          <button class="btn-check" type="button" disabled>중복확인</button>
+        </div>
+        <p class="hint is-bad">
+          <span class="hint-icon">!</span>
+          이미 사용 중인 닉네임입니다
+          <span class="counter">2 / 12</span>
+        </p>
+        <p class="case-note">
+          누군가 먼저 쓰고 있습니다. 2번과 생김새는 같지만
+          <b>화면 혼자서는 알 수 없는</b> 종류의 잘못입니다.
+          다른 사람이 뭘 썼는지는 화면 밖의 일이니까요.
+        </p>
+      </article>
+
+    </div>
+  </section>
+
+  <!-- ── 눌러보는 미리보기 ───────────────────────────────── -->
+  <section class="section">
+    <h2>눌러보기</h2>
+    <p class="lede">
+      아래 칩을 눌러 상태를 바꿔보세요. 실제로 입력해 보면 글자수와 공백 검사도 움직입니다.
+      <b>모양만 확인하는 미리보기입니다</b> — 어디에도 연결되어 있지 않습니다.
+    </p>
+
+    <div class="play">
+      <div class="play-stage">
+        <label class="field-label" for="live">닉네임</label>
+        <div class="field-row">
+          <input class="field" id="live" type="text" maxlength="12" placeholder="닉네임을 입력하세요" autocomplete="off" />
+          <button class="btn-check" id="liveBtn" type="button">중복확인</button>
+        </div>
+        <p class="hint" id="liveHint"><span class="counter" id="liveCount">0 / 12</span></p>
+      </div>
+
+      <div class="switch">
+        <p class="switch-label">상태 바꿔보기</p>
+        <button class="chip" type="button" data-state="idle" aria-pressed="true">기본</button>
+        <button class="chip" type="button" data-state="invalid" aria-pressed="false">규칙 위반</button>
+        <button class="chip" type="button" data-state="checking" aria-pressed="false">확인 중</button>
+        <button class="chip" type="button" data-state="ok" aria-pressed="false">사용 가능</button>
+        <button class="chip" type="button" data-state="taken" aria-pressed="false">이미 사용 중</button>
+      </div>
+    </div>
+  </section>
+
+  <!-- ── 규칙 ────────────────────────────────────────────── -->
+  <section class="section">
+    <h2>정해둔 규칙</h2>
+    <p class="lede">숫자와 문구는 여기에 적힌 대로 화면에 박아둡니다. 바꾸려면 이 표부터 고칩니다.</p>
+
+    <div class="table-scroll">
+      <table>
+        <thead>
+          <tr><th>항목</th><th>값</th><th>왜</th></tr>
+        </thead>
+        <tbody>
+          <tr><td>글자 수</td><td>1 ~ 12자</td><td>게임 화면 점수판에 이름이 들어가야 해서, 길면 잘립니다.</td></tr>
+          <tr><td>공백</td><td>불가</td><td>앞뒤·중간 모두 막습니다. "수진"과 "수진 "이 다른 사람이 되면 곤란합니다.</td></tr>
+          <tr><td>버튼 켜짐</td><td>규칙을 통과했을 때만</td><td>못 누를 버튼은 눌리지 않게 보여야 합니다.</td></tr>
+          <tr><td>글자를 다시 고치면</td><td>결과 문구 사라짐</td><td>"수진"으로 통과해 놓고 "엘리"로 고쳤는데 통과 표시가 남아 있으면 거짓말이 됩니다.</td></tr>
+          <tr><td>입력칸 높이</td><td><code>48px</code></td><td>버튼과 높이를 맞춰야 줄이 반듯합니다.</td></tr>
+          <tr><td>문구 자리</td><td>항상 <code>22px</code> 확보</td><td>문구가 나타날 때 아래 내용이 밀려 내려가지 않게 자리를 미리 비워둡니다.</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </section>
+
+  <p class="colophon">Scrabble · Lobby 01</p>
+
+</div>
+</div>
+
+<script>
+  // 미리보기용입니다. 화면이 어떻게 보이는지만 확인하는 코드고,
+  // 실제 기능은 나중에 따로 붙입니다.
+  (function () {
+    var input   = document.getElementById('live');
+    var button  = document.getElementById('liveBtn');
+    var hint    = document.getElementById('liveHint');
+    var chips   = document.querySelectorAll('.chip');
+    var MAX = 12;
+
+    // 상태별로 "입력칸 색 / 버튼 글자 / 안내문구"가 어떻게 달라지는지 한곳에 모아둡니다.
+    var LOOK = {
+      idle:     { field: '',       btnText: '중복확인', hint: '',        text: '' },
+      invalid:  { field: 'is-bad', btnText: '중복확인', hint: 'is-bad',  text: '공백 없이 1~12자로 입력해 주세요', icon: '!', sample: '수 진' },
+      checking: { field: '',       btnText: '확인 중…', hint: 'is-wait', text: '쓸 수 있는 닉네임인지 알아보는 중이에요', wait: true, sample: '수진' },
+      ok:       { field: 'is-ok',  btnText: '중복확인', hint: 'is-ok',   text: '사용 가능한 닉네임입니다', icon: '✓', sample: '수진' },
+      taken:    { field: 'is-bad', btnText: '중복확인', hint: 'is-bad',  text: '이미 사용 중인 닉네임입니다', icon: '!', sample: '엘리' }
+    };
+
+    function make(tag, className, text) {
+      var el = document.createElement(tag);
+      el.className = className;
+      if (text) el.textContent = text;
+      return el;
+    }
+
+    function isValid(value) {
+      return value.length > 0 && value.length <= MAX && !/\s/.test(value);
+    }
+
+    function draw(state) {
+      var look = LOOK[state] || LOOK.idle;
+      var value = input.value;
+
+      input.className = 'field ' + look.field;
+      button.textContent = look.btnText;
+      button.disabled = (state === 'checking') || !isValid(value);
+
+      hint.className = 'hint ' + look.hint;
+      hint.innerHTML = '';
+
+      if (look.wait) hint.appendChild(make('span', 'waiting'));
+      else if (look.icon) hint.appendChild(make('span', 'hint-icon', look.icon));
+
+      if (look.text) hint.appendChild(document.createTextNode(' ' + look.text + ' '));
+
+      hint.appendChild(make('span', 'counter' + (value.length >= MAX ? ' is-full' : ''),
+                            value.length + ' / ' + MAX));
+    }
+
+    chips.forEach(function (chip) {
+      chip.addEventListener('click', function () {
+        chips.forEach(function (other) {
+          other.setAttribute('aria-pressed', String(other === chip));
+        });
+        var sample = LOOK[chip.dataset.state].sample;
+        if (sample && !input.value) input.value = sample;
+        draw(chip.dataset.state);
+      });
+    });
+
+    // 직접 입력하면 기본 상태로 돌아갑니다.
+    input.addEventListener('input', function () {
+      chips.forEach(function (chip) {
+        chip.setAttribute('aria-pressed', String(chip.dataset.state === 'idle'));
+      });
+      draw(input.value.length && !isValid(input.value) ? 'invalid' : 'idle');
+    });
+
+    draw('idle');
+  })();
+</script>
