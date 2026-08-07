@@ -1,0 +1,449 @@
+<!-- @dsCard group="대기실 (Lobby)" viewport="1280x1800" name="방코드 입력 + 입장" subtitle="상태 6종 · 눌러보기 · 규칙" -->
+<!--
+  대기실 ② — 친구모드 · 방코드 입력 + 입장 (참가자 쪽)
+  화면(모양)만 담은 파일입니다. 서버를 부르거나 데이터를 저장하지 않습니다.
+  방코드 칸은 스크래블 타일 네 개로 그립니다.
+-->
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>방코드 입력 + 입장 — 스크래블 대기실</title>
+<link rel="stylesheet" href="../../styles.css" />
+<style>
+*{box-sizing:border-box}
+body{margin:0;padding:0;background:var(--paper);color:var(--ink);font-family:var(--font-text);line-height:1.6;-webkit-font-smoothing:antialiased}
+.board{min-height:100vh;padding:40px 28px 72px}
+.wrap{max-width:1000px;margin:0 auto}
+
+/* ── 문서 머리 ─────────────────────────────────────────── */
+.doc-head{padding-bottom:34px;border-bottom:2px solid var(--rule)}
+.tiles{display:flex;flex-wrap:wrap;gap:0;margin:0 0 22px}
+.tile{width:var(--cell);height:var(--cell);display:grid;place-items:center;background:var(--theme);border:1px solid var(--rule);margin:-1px 0 0 -1px;font-family:var(--font-display);font-weight:700;font-size:20px;color:var(--ink)}
+.tile.is-gap{background:transparent;border-color:transparent}
+.crumb{margin:0 0 10px;font-family:var(--font-mono);font-size:11px;letter-spacing:var(--track-caps);text-transform:uppercase;color:var(--ink-soft)}
+.doc-head h1{margin:0 0 12px;font-family:var(--font-display);font-weight:700;font-size:34px;letter-spacing:-.01em}
+.doc-head p{margin:0;max-width:58ch;color:var(--ink-soft);font-size:15px;text-wrap:pretty}
+
+/* ── 구역 ──────────────────────────────────────────────── */
+.section{margin-top:56px}
+.section>h2{display:inline-block;margin:0 0 10px;padding:5px 12px;background:var(--theme);border:1px solid var(--rule);font-family:var(--font-display);font-size:12px;font-weight:700;letter-spacing:var(--track-caps);text-transform:uppercase}
+.section>.lede{margin:0 0 26px;max-width:62ch;font-size:15px;color:var(--ink-soft);text-wrap:pretty}
+
+/* ── 상태 카드 격자 ────────────────────────────────────── */
+.grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(360px,1fr));gap:0}
+.case{margin:-1px 0 0 -1px;padding:22px;background:var(--paper-2);border:1px solid var(--rule)}
+.case.is-extra{background:repeating-linear-gradient(-45deg,var(--paper-2),var(--paper-2) 9px,var(--paper) 9px,var(--paper) 18px)}
+.case-name{display:flex;align-items:center;gap:9px;margin:0 0 20px;font-family:var(--font-mono);font-size:11px;letter-spacing:var(--track-caps);text-transform:uppercase;color:var(--ink-soft)}
+.mark{width:12px;height:12px;flex:none;border:1px solid var(--rule);background:transparent}
+.mark.is-ok{background:var(--ok)}
+.mark.is-bad{background:var(--bad)}
+.mark.is-wait{background:var(--theme)}
+.case-note{margin:18px 0 0;padding-top:15px;border-top:1px solid var(--grid);font-size:13px;color:var(--ink-soft);text-wrap:pretty}
+.tag{display:inline-block;margin-left:auto;padding:2px 7px;background:var(--theme-tint);border:1px solid var(--rule);font-size:10px;letter-spacing:var(--track-caps)}
+
+/* ── ⬇ 여기부터가 실제 컴포넌트입니다 ─────────────────── */
+.field-label{display:block;margin-bottom:9px;font-family:var(--font-mono);font-size:11px;letter-spacing:var(--track-caps);text-transform:uppercase;color:var(--ink)}
+
+.entry-row{display:flex;align-items:stretch;flex-wrap:wrap;gap:0}
+
+/* 방코드 = 타일 네 칸. 칸끼리 테두리를 겹쳐서 격자처럼 붙입니다. */
+.code-row{display:flex}
+.code-cell{width:48px;height:58px;margin-left:-1px;padding:0;
+  font-family:var(--font-display);font-size:24px;font-weight:700;text-align:center;text-transform:uppercase;
+  color:var(--ink);background:#fff;border:1.5px solid var(--rule);border-radius:0;outline:none;
+  transition:background .15s,box-shadow .15s}
+.code-cell:first-child{margin-left:0}
+.code-cell::placeholder{color:var(--ink-faint)}
+.code-cell:focus{box-shadow:inset 0 -4px 0 var(--theme)}
+.code-row.is-ok  .code-cell{background:var(--ok-tint)}
+.code-row.is-bad .code-cell{background:var(--bad-tint)}
+/* 코드가 틀렸을 때 — 칸이 한 번 좌우로 흔들립니다. */
+.code-row.is-shake{animation:shake .3s ease-in-out}
+@keyframes shake{25%{transform:translateX(-5px)}75%{transform:translateX(5px)}}
+@media (prefers-reduced-motion:reduce){.code-row.is-shake{animation:none}}
+
+.btn-enter{flex:none;margin-left:-1px;height:58px;padding:0 22px;
+  font-family:var(--font-display);font-size:12px;font-weight:700;letter-spacing:var(--track-caps);text-transform:uppercase;white-space:nowrap;
+  color:var(--ink);background:var(--theme);border:1.5px solid var(--rule);border-radius:0;cursor:pointer;transition:background .15s}
+.btn-enter:hover:not(:disabled){background:var(--theme-deep)}
+.btn-enter:active:not(:disabled){background:var(--theme-deep);box-shadow:inset 0 2px 0 rgba(0,0,0,.14)}
+.btn-enter:disabled{cursor:not-allowed;background:transparent;color:var(--ink-faint);border-color:var(--grid)}
+
+.hint{display:flex;align-items:center;gap:7px;margin:12px 0 0;min-height:22px;font-size:13.5px;color:var(--ink-soft)}
+.hint.is-ok{color:var(--ok)}
+.hint.is-bad{color:var(--bad)}
+.hint.is-wait{color:var(--ink)}
+.hint-icon{flex:none;width:18px;height:18px;display:grid;place-items:center;font-family:var(--font-display);font-size:11px;font-weight:700;color:#fff}
+.is-ok>.hint-icon{background:var(--ok)}
+.is-bad>.hint-icon{background:var(--bad)}
+.waiting{flex:none;width:14px;height:14px;background:var(--theme);border:1px solid var(--rule);animation:flip 1s steps(2,end) infinite}
+@keyframes flip{50%{background:transparent}}
+@media (prefers-reduced-motion:reduce){.waiting{animation-duration:3s}}
+/* ── ⬆ 컴포넌트 끝 ────────────────────────────────────── */
+
+/* ── 눌러보는 미리보기 ─────────────────────────────────── */
+.play{padding:30px;background:var(--paper-2);border:1.5px solid var(--rule)}
+.play-stage{max-width:470px}
+.switch{display:flex;flex-wrap:wrap;gap:0;margin-top:28px;padding-top:22px;border-top:1px solid var(--grid)}
+.switch-label{width:100%;margin:0 0 10px;font-family:var(--font-mono);font-size:11px;letter-spacing:var(--track-caps);text-transform:uppercase;color:var(--ink-soft)}
+.chip{margin:0 0 0 -1px;padding:9px 14px;font-family:var(--font-display);font-size:11px;font-weight:700;letter-spacing:var(--track-caps);text-transform:uppercase;color:var(--ink);background:transparent;border:1px solid var(--rule);border-radius:0;cursor:pointer;transition:background .15s}
+.chip:hover{background:var(--theme-tint)}
+.chip[aria-pressed="true"]{background:var(--theme)}
+
+/* ── 규칙 표 ───────────────────────────────────────────── */
+table{width:100%;border-collapse:collapse;font-size:14px;background:var(--paper-2)}
+th,td{text-align:left;padding:13px 15px;border:1px solid var(--grid);vertical-align:top}
+th{background:var(--theme-tint);border-color:var(--rule);font-family:var(--font-mono);font-size:11px;letter-spacing:var(--track-caps);text-transform:uppercase;font-weight:400;color:var(--ink)}
+td:first-child{white-space:nowrap;font-weight:600}
+.table-scroll{overflow-x:auto;border:1.5px solid var(--rule)}
+code{padding:1px 6px;background:var(--theme-tint);font-family:var(--font-mono);font-size:.88em}
+.colophon{margin:48px 0 0;text-align:center;font-family:var(--font-mono);font-size:10px;letter-spacing:var(--track-caps);text-transform:uppercase;color:var(--ink-faint)}
+</style>
+
+<div class="board">
+<div class="wrap">
+
+  <header class="doc-head">
+    <div class="tiles" aria-hidden="true">
+      <div class="tile">R</div><div class="tile">O</div><div class="tile">O</div><div class="tile">M</div>
+      <div class="tile is-gap"></div>
+      <div class="tile">C</div><div class="tile">O</div><div class="tile">D</div><div class="tile">E</div>
+    </div>
+    <p class="crumb">대기실 · 기능 ② · 친구모드 (참가자)</p>
+    <h1>방코드 입력 + 입장</h1>
+    <p>
+      친구가 알려준 네 글자를 넣고 방에 들어갑니다.
+      ①과 구조는 같지만 결정적으로 다른 점이 하나 있습니다 —
+      <b>성공하면 이 화면에 머무르지 않고 게임 화면으로 넘어갑니다.</b>
+      그래서 "통과했다"는 표시는 아주 잠깐만 보입니다.
+    </p>
+  </header>
+
+  <!-- ── 상태 ────────────────────────────────────────────── -->
+  <section class="section">
+    <h2>상태 6종</h2>
+    <p class="lede">
+      비어 있음 → 아직 덜 찼음 → 확인하는 중 → 없는 방 / 꽉 찬 방 / 입장.
+      마지막 두 칸은 둘 다 실패지만 <b>사용자가 다음에 할 일이 다릅니다.</b>
+    </p>
+
+    <div class="grid">
+
+      <!-- 1 -->
+      <article class="case">
+        <p class="case-name"><i class="mark"></i>1 · 기본 (비어 있음)</p>
+        <label class="field-label">방코드</label>
+        <div class="entry-row">
+          <div class="code-row">
+            <input class="code-cell" type="text" maxlength="1" disabled />
+            <input class="code-cell" type="text" maxlength="1" disabled />
+            <input class="code-cell" type="text" maxlength="1" disabled />
+            <input class="code-cell" type="text" maxlength="1" disabled />
+          </div>
+          <button class="btn-enter" type="button" disabled>입장</button>
+        </div>
+        <p class="hint">친구에게 받은 네 글자를 넣어주세요</p>
+        <p class="case-note">
+          빈 칸 네 개가 <b>몇 글자를 넣어야 하는지를 그 자체로 알려줍니다.</b>
+          긴 입력칸 하나였다면 몇 자인지 따로 적어줘야 했습니다.
+        </p>
+      </article>
+
+      <!-- 2 -->
+      <article class="case">
+        <p class="case-name"><i class="mark is-bad"></i>2 · 아직 덜 찼음</p>
+        <label class="field-label">방코드</label>
+        <div class="entry-row">
+          <div class="code-row">
+            <input class="code-cell" type="text" maxlength="1" value="A" disabled />
+            <input class="code-cell" type="text" maxlength="1" value="7" disabled />
+            <input class="code-cell" type="text" maxlength="1" disabled />
+            <input class="code-cell" type="text" maxlength="1" disabled />
+          </div>
+          <button class="btn-enter" type="button" disabled>입장</button>
+        </div>
+        <p class="hint">2 / 4</p>
+        <p class="case-note">
+          아직 채우는 중입니다. <b>여기서 빨간 오류를 띄우면 안 됩니다.</b>
+          아직 잘못한 게 아니라 그냥 안 끝난 것이니까요. 버튼만 꺼둡니다.
+        </p>
+      </article>
+
+      <!-- 3 -->
+      <article class="case">
+        <p class="case-name"><i class="mark is-wait"></i>3 · 확인하는 중</p>
+        <label class="field-label">방코드</label>
+        <div class="entry-row">
+          <div class="code-row">
+            <input class="code-cell" type="text" maxlength="1" value="A" disabled />
+            <input class="code-cell" type="text" maxlength="1" value="7" disabled />
+            <input class="code-cell" type="text" maxlength="1" value="K" disabled />
+            <input class="code-cell" type="text" maxlength="1" value="2" disabled />
+          </div>
+          <button class="btn-enter" type="button" disabled>확인 중…</button>
+        </div>
+        <p class="hint is-wait"><span class="waiting"></span>그런 방이 있는지 알아보는 중이에요</p>
+        <p class="case-note">
+          네 글자가 다 찼고, 답을 기다립니다.
+          이때 <b>칸도 같이 잠급니다.</b> 기다리는 동안 글자를 고치면
+          방금 물어본 코드와 화면에 보이는 코드가 달라집니다.
+        </p>
+      </article>
+
+      <!-- 4 -->
+      <article class="case">
+        <p class="case-name"><i class="mark is-bad"></i>4 · 없는 방코드</p>
+        <label class="field-label">방코드</label>
+        <div class="entry-row">
+          <div class="code-row is-bad">
+            <input class="code-cell" type="text" maxlength="1" value="Z" disabled />
+            <input class="code-cell" type="text" maxlength="1" value="9" disabled />
+            <input class="code-cell" type="text" maxlength="1" value="Q" disabled />
+            <input class="code-cell" type="text" maxlength="1" value="4" disabled />
+          </div>
+          <button class="btn-enter" type="button" disabled>입장</button>
+        </div>
+        <p class="hint is-bad">
+          <span class="hint-icon">!</span>
+          그런 방이 없어요. 코드를 다시 확인해 주세요
+        </p>
+        <p class="case-note">
+          오타이거나, 방이 이미 닫혔습니다.
+          칸이 한 번 <b>좌우로 흔들리고</b> 곧바로 비워지며 첫 칸에 커서가 갑니다 —
+          다시 치는 것 말고 할 일이 없으니 그 준비를 대신 해줍니다.
+        </p>
+      </article>
+
+      <!-- 5 -->
+      <article class="case is-extra">
+        <p class="case-name"><i class="mark is-bad"></i>5 · 꽉 찬 방 <span class="tag">제안</span></p>
+        <label class="field-label">방코드</label>
+        <div class="entry-row">
+          <div class="code-row is-bad">
+            <input class="code-cell" type="text" maxlength="1" value="A" disabled />
+            <input class="code-cell" type="text" maxlength="1" value="7" disabled />
+            <input class="code-cell" type="text" maxlength="1" value="K" disabled />
+            <input class="code-cell" type="text" maxlength="1" value="2" disabled />
+          </div>
+          <button class="btn-enter" type="button" disabled>입장</button>
+        </div>
+        <p class="hint is-bad">
+          <span class="hint-icon">!</span>
+          이미 두 명이 게임 중인 방이에요
+        </p>
+        <p class="case-note">
+          <b>기획에 없던 칸입니다.</b> 코드는 맞았는데 자리가 없는 경우입니다.
+          4번과 달리 <b>다시 쳐도 소용이 없어서</b>, 같은 빨간 문구로 뭉뚱그리면
+          사용자는 오타인 줄 알고 계속 다시 칩니다. 필요 없으면 빼겠습니다.
+        </p>
+      </article>
+
+      <!-- 6 -->
+      <article class="case">
+        <p class="case-name"><i class="mark is-ok"></i>6 · 입장 (곧 넘어감)</p>
+        <label class="field-label">방코드</label>
+        <div class="entry-row">
+          <div class="code-row is-ok">
+            <input class="code-cell" type="text" maxlength="1" value="A" disabled />
+            <input class="code-cell" type="text" maxlength="1" value="7" disabled />
+            <input class="code-cell" type="text" maxlength="1" value="K" disabled />
+            <input class="code-cell" type="text" maxlength="1" value="2" disabled />
+          </div>
+          <button class="btn-enter" type="button" disabled>입장</button>
+        </div>
+        <p class="hint is-ok">
+          <span class="hint-icon">✓</span>
+          방을 찾았어요. 들어가는 중…
+        </p>
+        <p class="case-note">
+          잠깐 초록으로 바뀌었다가 게임 화면으로 넘어갑니다.
+          <b>바로 넘겨버리면</b> 사용자는 방금 뭐가 일어났는지 모른 채
+          화면이 튄 것처럼 느낍니다. 이 짧은 순간이 그 설명입니다.
+        </p>
+      </article>
+
+    </div>
+  </section>
+
+  <!-- ── 눌러보기 ────────────────────────────────────────── -->
+  <section class="section">
+    <h2>눌러보기</h2>
+    <p class="lede">
+      칸에 직접 쳐보세요. 한 글자 넣으면 다음 칸으로 넘어가고, 지우면 앞 칸으로 돌아갑니다.
+      네 글자를 붙여넣어도 됩니다. <b>모양만 확인하는 미리보기입니다</b> — 어디에도 연결되어 있지 않습니다.
+    </p>
+
+    <div class="play">
+      <div class="play-stage">
+        <label class="field-label" for="c0">방코드</label>
+        <div class="entry-row">
+          <div class="code-row" id="liveRow">
+            <input class="code-cell" id="c0" type="text" maxlength="1" autocomplete="off" aria-label="방코드 1번째 글자" />
+            <input class="code-cell" id="c1" type="text" maxlength="1" autocomplete="off" aria-label="방코드 2번째 글자" />
+            <input class="code-cell" id="c2" type="text" maxlength="1" autocomplete="off" aria-label="방코드 3번째 글자" />
+            <input class="code-cell" id="c3" type="text" maxlength="1" autocomplete="off" aria-label="방코드 4번째 글자" />
+          </div>
+          <button class="btn-enter" id="liveBtn" type="button">입장</button>
+        </div>
+        <p class="hint" id="liveHint">친구에게 받은 네 글자를 넣어주세요</p>
+      </div>
+
+      <div class="switch">
+        <p class="switch-label">상태 바꿔보기</p>
+        <button class="chip" type="button" data-state="idle" aria-pressed="true">기본</button>
+        <button class="chip" type="button" data-state="partial" aria-pressed="false">덜 찼음</button>
+        <button class="chip" type="button" data-state="checking" aria-pressed="false">확인 중</button>
+        <button class="chip" type="button" data-state="notfound" aria-pressed="false">없는 방</button>
+        <button class="chip" type="button" data-state="full" aria-pressed="false">꽉 찬 방</button>
+        <button class="chip" type="button" data-state="entering" aria-pressed="false">입장</button>
+      </div>
+    </div>
+  </section>
+
+  <!-- ── 규칙 ────────────────────────────────────────────── -->
+  <section class="section">
+    <h2>정해둔 규칙</h2>
+    <p class="lede">숫자와 문구는 여기에 적힌 대로 화면에 박아둡니다. 바꾸려면 이 표부터 고칩니다.</p>
+
+    <div class="table-scroll">
+      <table>
+        <thead>
+          <tr><th>항목</th><th>값</th><th>왜</th></tr>
+        </thead>
+        <tbody>
+          <tr><td>코드 길이</td><td>4자</td><td>친구에게 말로 불러줄 수 있어야 합니다. 길면 못 외웁니다.</td></tr>
+          <tr><td>쓰는 글자</td><td>영문 대문자 + 숫자</td><td>소문자로 쳐도 자동으로 대문자가 됩니다. 대소문자를 구별하면 말로 알려줄 때 틀립니다.</td></tr>
+          <tr><td>빼는 글자</td><td><code>O</code> <code>0</code> <code>I</code> <code>1</code></td><td>말로 불러줄 때 가장 많이 틀리는 짝입니다. 아예 안 쓰면 헷갈릴 일이 없습니다.</td></tr>
+          <tr><td>한 글자 넣으면</td><td>다음 칸으로 자동 이동</td><td>네 번 클릭하게 만들 이유가 없습니다.</td></tr>
+          <tr><td>지우면</td><td>앞 칸으로 이동</td><td>고칠 때 자연스럽게 뒤로 돌아가야 합니다.</td></tr>
+          <tr><td>붙여넣기</td><td>네 칸에 나눠 채움</td><td>친구가 채팅으로 보낸 코드를 그대로 붙일 수 있어야 합니다.</td></tr>
+          <tr><td>버튼 켜짐</td><td>네 칸이 다 찼을 때만</td><td>덜 찬 상태에서 누를 수 있으면 헛수고를 시킵니다.</td></tr>
+          <tr><td>확인하는 동안</td><td>칸·버튼 모두 잠금</td><td>물어본 코드와 보이는 코드가 달라지면 안 됩니다.</td></tr>
+          <tr><td>없는 방일 때</td><td>흔들림 → 비우기 → 첫 칸 커서</td><td>다시 치는 것 말고 할 일이 없으니 미리 준비해 둡니다.</td></tr>
+          <tr><td>칸 크기</td><td><code>48 × 58px</code></td><td>[입장] 버튼과 높이를 맞춰야 줄이 반듯합니다.</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </section>
+
+  <p class="colophon">Scrabble · Lobby 02</p>
+
+</div>
+</div>
+
+<script>
+  // 미리보기용입니다. 화면이 어떻게 보이는지만 확인하는 코드고,
+  // 실제 기능은 나중에 따로 붙입니다.
+  (function () {
+    var row    = document.getElementById('liveRow');
+    var cells  = [].slice.call(row.querySelectorAll('.code-cell'));
+    var button = document.getElementById('liveBtn');
+    var hint   = document.getElementById('liveHint');
+    var chips  = document.querySelectorAll('.chip');
+
+    var LEN = 4;
+    var ALLOWED = /[A-HJ-NP-Z2-9]/;   // O·0·I·1 은 뺍니다 (말로 불러줄 때 헷갈려서)
+
+    // 상태별로 "칸 색 / 버튼 글자 / 안내문구"가 어떻게 달라지는지 한곳에 모아둡니다.
+    var LOOK = {
+      idle:     { row: '', btnText: '입장',    hint: '',        text: '친구에게 받은 네 글자를 넣어주세요' },
+      partial:  { row: '', btnText: '입장',    hint: '',        text: '', counter: true, sample: 'A7' },
+      checking: { row: '', btnText: '확인 중…', hint: 'is-wait', text: '그런 방이 있는지 알아보는 중이에요', wait: true, sample: 'A7K2' },
+      notfound: { row: 'is-bad', btnText: '입장', hint: 'is-bad', text: '그런 방이 없어요. 코드를 다시 확인해 주세요', icon: '!', sample: 'Z9Q4' },
+      full:     { row: 'is-bad', btnText: '입장', hint: 'is-bad', text: '이미 두 명이 게임 중인 방이에요', icon: '!', sample: 'A7K2' },
+      entering: { row: 'is-ok',  btnText: '입장', hint: 'is-ok',  text: '방을 찾았어요. 들어가는 중…', icon: '✓', sample: 'A7K2' }
+    };
+
+    function make(tag, className, text) {
+      var el = document.createElement(tag);
+      el.className = className;
+      if (text) el.textContent = text;
+      return el;
+    }
+
+    function value() {
+      return cells.map(function (cell) { return cell.value; }).join('');
+    }
+
+    function fill(text) {
+      cells.forEach(function (cell, i) { cell.value = text[i] || ''; });
+    }
+
+    function draw(state) {
+      var look = LOOK[state] || LOOK.idle;
+      var filled = value().length;
+
+      row.className = 'code-row ' + look.row;
+      button.textContent = look.btnText;
+      button.disabled = (state === 'checking') || filled < LEN;
+      cells.forEach(function (cell) { cell.disabled = (state === 'checking'); });
+
+      hint.className = 'hint ' + look.hint;
+      hint.innerHTML = '';
+
+      if (look.wait) hint.appendChild(make('span', 'waiting'));
+      else if (look.icon) hint.appendChild(make('span', 'hint-icon', look.icon));
+
+      // "덜 찼음"일 때는 문구 대신 몇 칸 찼는지만 보여줍니다.
+      var text = look.counter ? (filled + ' / ' + LEN) : look.text;
+      if (text) hint.appendChild(document.createTextNode(' ' + text));
+    }
+
+    // 상태를 스스로 판단합니다 — 다 찼으면 기본, 덜 찼으면 덜 찼음.
+    function drawAuto() {
+      var filled = value().length;
+      draw(filled > 0 && filled < LEN ? 'partial' : 'idle');
+    }
+
+    function pressChip(state) {
+      chips.forEach(function (chip) {
+        chip.setAttribute('aria-pressed', String(chip.dataset.state === state));
+      });
+    }
+
+    cells.forEach(function (cell, i) {
+      // 한 글자 넣으면 다음 칸으로 넘어갑니다.
+      cell.addEventListener('input', function () {
+        var char = cell.value.toUpperCase().slice(-1);
+        cell.value = ALLOWED.test(char) ? char : '';
+        if (cell.value && i < LEN - 1) cells[i + 1].focus();
+        pressChip(null);
+        drawAuto();
+      });
+
+      // 빈 칸에서 지우면 앞 칸으로 돌아갑니다.
+      cell.addEventListener('keydown', function (e) {
+        if (e.key === 'Backspace' && !cell.value && i > 0) {
+          cells[i - 1].focus();
+        } else if (e.key === 'ArrowLeft' && i > 0) {
+          cells[i - 1].focus();
+        } else if (e.key === 'ArrowRight' && i < LEN - 1) {
+          cells[i + 1].focus();
+        }
+      });
+
+      // 네 글자를 한 번에 붙여넣으면 나눠 담습니다.
+      cell.addEventListener('paste', function (e) {
+        e.preventDefault();
+        var text = (e.clipboardData || window.clipboardData).getData('text')
+                     .toUpperCase().split('').filter(function (c) {
+                       return ALLOWED.test(c);
+                     }).join('').slice(0, LEN);
+        fill(text);
+        cells[Math.min(text.length, LEN - 1)].focus();
+        pressChip(null);
+        drawAuto();
+      });
+    });
+
+    chips.forEach(function (chip) {
+      chip.addEventListener('click', function () {
+        pressChip(chip.dataset.state);
+        var sample = LOOK[chip.dataset.state].sample;
+        fill(sample || '');
+        draw(chip.dataset.state);
+      });
+    });
+
+    draw('idle');
+  })();
+</script>
