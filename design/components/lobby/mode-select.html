@@ -1,0 +1,448 @@
+<!-- @dsCard group="대기실 (Lobby)" viewport="1280x1650" name="모드 선택 (택 1)" subtitle="상태 5종 · 눌러보기 · 다음에 열리는 것" -->
+<!--
+  대기실 — 모드 선택 (친구 / 랜덤 중 하나)
+  화면(모양)만 담은 파일입니다. 서버를 부르거나 데이터를 저장하지 않습니다.
+  대기실에서 유일하게 백엔드에 물어볼 게 없는 조각입니다. 화면 안에서 시작하고 끝납니다.
+-->
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>모드 선택 — 스크래블 대기실</title>
+<link rel="stylesheet" href="../../styles.css" />
+<style>
+*{box-sizing:border-box}
+body{margin:0;padding:0;background:var(--paper);color:var(--ink);font-family:var(--font-text);line-height:1.6;-webkit-font-smoothing:antialiased}
+.board{min-height:100vh;padding:40px 28px 72px}
+.wrap{max-width:1000px;margin:0 auto}
+
+/* ── 문서 머리 ─────────────────────────────────────────── */
+.doc-head{padding-bottom:34px;border-bottom:2px solid var(--rule)}
+.tiles{display:flex;flex-wrap:wrap;gap:0;margin:0 0 22px}
+.tile{width:var(--cell);height:var(--cell);display:grid;place-items:center;background:var(--theme);border:1px solid var(--rule);margin:-1px 0 0 -1px;font-family:var(--font-display);font-weight:700;font-size:20px;color:var(--ink)}
+.crumb{margin:0 0 10px;font-family:var(--font-mono);font-size:11px;letter-spacing:var(--track-caps);text-transform:uppercase;color:var(--ink-soft)}
+.doc-head h1{margin:0 0 12px;font-family:var(--font-display);font-weight:700;font-size:34px;letter-spacing:-.01em}
+.doc-head p{margin:0;max-width:58ch;color:var(--ink-soft);font-size:15px;text-wrap:pretty}
+
+/* ── 구역 ──────────────────────────────────────────────── */
+.section{margin-top:56px}
+.section>h2{display:inline-block;margin:0 0 10px;padding:5px 12px;background:var(--theme);border:1px solid var(--rule);font-family:var(--font-display);font-size:12px;font-weight:700;letter-spacing:var(--track-caps);text-transform:uppercase}
+.section>.lede{margin:0 0 26px;max-width:62ch;font-size:15px;color:var(--ink-soft);text-wrap:pretty}
+
+/* ── 상태 카드 격자 ────────────────────────────────────── */
+.grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(360px,1fr));gap:0}
+.case{margin:-1px 0 0 -1px;padding:22px;background:var(--paper-2);border:1px solid var(--rule)}
+.case.is-extra{background:repeating-linear-gradient(-45deg,var(--paper-2),var(--paper-2) 9px,var(--paper) 9px,var(--paper) 18px)}
+.case-name{display:flex;align-items:center;gap:9px;margin:0 0 20px;font-family:var(--font-mono);font-size:11px;letter-spacing:var(--track-caps);text-transform:uppercase;color:var(--ink-soft)}
+.mark{width:12px;height:12px;flex:none;border:1px solid var(--rule);background:transparent}
+.mark.is-ok{background:var(--ok)}
+.mark.is-wait{background:var(--theme)}
+.case-note{margin:18px 0 0;padding-top:15px;border-top:1px solid var(--grid);font-size:13px;color:var(--ink-soft);text-wrap:pretty}
+.tag{display:inline-block;margin-left:auto;padding:2px 7px;background:var(--theme-tint);border:1px solid var(--rule);font-size:10px;letter-spacing:var(--track-caps)}
+
+/* ── ⬇ 여기부터가 실제 컴포넌트입니다 ─────────────────── */
+.field-label{display:block;margin-bottom:9px;font-family:var(--font-mono);font-size:11px;letter-spacing:var(--track-caps);text-transform:uppercase;color:var(--ink)}
+
+.modes{display:flex;align-items:stretch}
+
+/* 진짜 라디오 버튼을 안 보이게 깔아둡니다.
+   그래야 키보드 방향키로 고르는 게 저절로 됩니다. */
+.mode{position:relative;flex:1;min-width:0;margin-left:-1px;padding:18px 14px;
+  display:block;text-align:center;cursor:pointer;
+  background:#fff;border:1.5px solid var(--rule);transition:background .15s}
+.mode:first-child{margin-left:0}
+.mode:hover{background:var(--theme-tint)}
+.mode-input{position:absolute;width:1px;height:1px;opacity:0;pointer-events:none}
+
+/* 고른 것 — 타일처럼 색이 찹니다. */
+.mode:has(.mode-input:checked){background:var(--theme)}
+.mode:has(.mode-input:focus-visible){box-shadow:inset 0 0 0 3px var(--theme-deep)}
+
+.mode-pics{display:flex;justify-content:center;margin:0 0 12px}
+.mode-pic{width:30px;height:36px;margin-left:-1px;display:grid;place-items:center;
+  background:var(--paper-2);border:1px solid var(--rule);
+  font-family:var(--font-display);font-size:15px;font-weight:700;color:var(--ink)}
+.mode-pic:first-child{margin-left:0}
+.mode-pic.is-any{background:transparent;border-style:dashed;border-color:var(--grid);color:var(--ink-faint)}
+.mode:has(.mode-input:checked) .mode-pic{background:#fff}
+.mode:has(.mode-input:checked) .mode-pic.is-any{background:transparent;border-color:var(--rule);color:var(--ink)}
+
+.mode-name{font-family:var(--font-display);font-size:14px;font-weight:700;letter-spacing:var(--track-caps);text-transform:uppercase}
+.mode-desc{margin-top:4px;font-size:12.5px;color:var(--ink-soft)}
+.mode:has(.mode-input:checked) .mode-desc{color:var(--ink)}
+
+/* 고르기 전에는 잠가둡니다 (닉네임을 아직 안 정했을 때) */
+.modes.is-locked{opacity:.45}
+.modes.is-locked .mode{cursor:not-allowed;background:transparent;border-color:var(--grid)}
+.modes.is-locked .mode:hover{background:transparent}
+
+.hint{display:flex;align-items:center;gap:7px;margin:12px 0 0;min-height:22px;font-size:13.5px;color:var(--ink-soft)}
+.hint.is-ok{color:var(--ok)}
+.hint-icon{flex:none;width:18px;height:18px;display:grid;place-items:center;font-family:var(--font-display);font-size:11px;font-weight:700;color:#fff}
+.is-ok>.hint-icon{background:var(--ok)}
+
+/* 고른 뒤 아래에 열리는 자리 */
+.opens{margin-top:16px;padding:16px 14px;border:1px dashed var(--grid);
+  font-size:13px;color:var(--ink-faint);text-align:center}
+.opens.is-open{border-style:solid;border-color:var(--rule);background:var(--paper-2);color:var(--ink)}
+.opens b{font-weight:600}
+/* ── ⬆ 컴포넌트 끝 ────────────────────────────────────── */
+
+/* ── 흐름도 ────────────────────────────────────────────── */
+.flow{display:grid;grid-template-columns:repeat(auto-fit,minmax(280px,1fr));gap:0}
+.branch{margin:-1px 0 0 -1px;padding:22px;background:var(--paper-2);border:1px solid var(--rule)}
+.branch h3{margin:0 0 14px;font-family:var(--font-display);font-size:13px;font-weight:700;letter-spacing:var(--track-caps);text-transform:uppercase}
+.step{display:flex;align-items:center;gap:10px;padding:11px 12px;margin-top:-1px;background:#fff;border:1px solid var(--rule);font-size:13.5px}
+.step-no{flex:none;width:22px;height:22px;display:grid;place-items:center;background:var(--theme);border:1px solid var(--rule);font-family:var(--font-mono);font-size:11px}
+.step.is-same{background:var(--theme-tint)}
+.branch p{margin:14px 0 0;font-size:12.5px;color:var(--ink-soft);text-wrap:pretty}
+
+/* ── 눌러보는 미리보기 ─────────────────────────────────── */
+.play{padding:30px;background:var(--paper-2);border:1.5px solid var(--rule)}
+.play-stage{max-width:440px;margin:0 auto}
+.switch{display:flex;flex-wrap:wrap;gap:0;margin-top:28px;padding-top:22px;border-top:1px solid var(--grid)}
+.switch-label{width:100%;margin:0 0 10px;font-family:var(--font-mono);font-size:11px;letter-spacing:var(--track-caps);text-transform:uppercase;color:var(--ink-soft)}
+.chip{margin:0 0 0 -1px;padding:9px 14px;font-family:var(--font-display);font-size:11px;font-weight:700;letter-spacing:var(--track-caps);text-transform:uppercase;color:var(--ink);background:transparent;border:1px solid var(--rule);border-radius:0;cursor:pointer;transition:background .15s}
+.chip:hover{background:var(--theme-tint)}
+.chip[aria-pressed="true"]{background:var(--theme)}
+
+/* ── 규칙 표 ───────────────────────────────────────────── */
+table{width:100%;border-collapse:collapse;font-size:14px;background:var(--paper-2)}
+th,td{text-align:left;padding:13px 15px;border:1px solid var(--grid);vertical-align:top}
+th{background:var(--theme-tint);border-color:var(--rule);font-family:var(--font-mono);font-size:11px;letter-spacing:var(--track-caps);text-transform:uppercase;font-weight:400;color:var(--ink)}
+td:first-child{white-space:nowrap;font-weight:600}
+.table-scroll{overflow-x:auto;border:1.5px solid var(--rule)}
+code{padding:1px 6px;background:var(--theme-tint);font-family:var(--font-mono);font-size:.88em}
+.colophon{margin:48px 0 0;text-align:center;font-family:var(--font-mono);font-size:10px;letter-spacing:var(--track-caps);text-transform:uppercase;color:var(--ink-faint)}
+</style>
+
+<div class="board">
+<div class="wrap">
+
+  <header class="doc-head">
+    <div class="tiles" aria-hidden="true">
+      <div class="tile">M</div><div class="tile">O</div><div class="tile">D</div><div class="tile">E</div>
+    </div>
+    <p class="crumb">대기실 · 모드 설정 (택 1)</p>
+    <h1>모드 선택</h1>
+    <p>
+      대기실에서 <b>유일하게 백엔드에 물어볼 게 없는 조각</b>입니다.
+      누구와 할지는 화면 안에서 정해지고 끝납니다.
+      그래서 기능 목록에는 안 올라갔지만, 화면으로는 반드시 있어야 합니다 —
+      이 선택 하나가 <b>다음에 무엇이 보일지를 결정</b>하기 때문입니다.
+    </p>
+  </header>
+
+  <!-- ── 상태 ────────────────────────────────────────────── -->
+  <section class="section">
+    <h2>상태 5종</h2>
+    <p class="lede">
+      잠김 → 아무것도 안 고름 → 친구 / 랜덤 → 바꿔 고름.
+      둘 중 <b>하나만</b> 고를 수 있고, 고르기 전에는 아래로 못 내려갑니다.
+    </p>
+
+    <div class="grid">
+
+      <!-- 1 -->
+      <article class="case is-extra">
+        <p class="case-name"><i class="mark"></i>1 · 잠김 (닉네임 먼저) <span class="tag">제안</span></p>
+        <label class="field-label">모드</label>
+        <div class="modes is-locked">
+          <div class="mode">
+            <div class="mode-pics"><i class="mode-pic">수</i><i class="mode-pic">엘</i></div>
+            <div class="mode-name">친구</div>
+            <div class="mode-desc">코드로 만나기</div>
+          </div>
+          <div class="mode">
+            <div class="mode-pics"><i class="mode-pic">수</i><i class="mode-pic is-any">?</i></div>
+            <div class="mode-name">랜덤</div>
+            <div class="mode-desc">아무나 만나기</div>
+          </div>
+        </div>
+        <p class="hint">닉네임을 먼저 정해주세요</p>
+        <p class="case-note">
+          <b>기획에 없던 칸입니다.</b> 기획 순서가 닉네임 → 모드라서,
+          닉네임 전에는 흐리게 잠가둡니다. 순서를 <b>글로 적는 대신 화면으로 보여주는</b> 방법입니다.
+          잠그지 않으면 모드를 먼저 고른 사람이 나중에 "닉네임부터"라는 말을 듣고 되돌아가야 합니다.
+        </p>
+      </article>
+
+      <!-- 2 -->
+      <article class="case">
+        <p class="case-name"><i class="mark"></i>2 · 아무것도 안 고름</p>
+        <label class="field-label">모드</label>
+        <div class="modes">
+          <label class="mode">
+            <input class="mode-input" type="radio" name="m2" disabled />
+            <div class="mode-pics"><i class="mode-pic">수</i><i class="mode-pic">엘</i></div>
+            <div class="mode-name">친구</div>
+            <div class="mode-desc">코드로 만나기</div>
+          </label>
+          <label class="mode">
+            <input class="mode-input" type="radio" name="m2" disabled />
+            <div class="mode-pics"><i class="mode-pic">수</i><i class="mode-pic is-any">?</i></div>
+            <div class="mode-name">랜덤</div>
+            <div class="mode-desc">아무나 만나기</div>
+          </label>
+        </div>
+        <div class="opens">모드를 고르면 여기에 다음 단계가 열려요</div>
+        <p class="case-note">
+          <b>기본값을 미리 골라두지 않았습니다.</b> 하나를 켜둔 채 시작하면
+          사용자는 자기가 고른 줄 모르고 넘어갑니다. 친구랑 하려던 사람이
+          랜덤으로 들어가 버리는 일이 여기서 생깁니다.
+        </p>
+      </article>
+
+      <!-- 3 -->
+      <article class="case">
+        <p class="case-name"><i class="mark is-ok"></i>3 · 친구 고름</p>
+        <label class="field-label">모드</label>
+        <div class="modes">
+          <label class="mode">
+            <input class="mode-input" type="radio" name="m3" checked disabled />
+            <div class="mode-pics"><i class="mode-pic">수</i><i class="mode-pic">엘</i></div>
+            <div class="mode-name">친구</div>
+            <div class="mode-desc">코드로 만나기</div>
+          </label>
+          <label class="mode">
+            <input class="mode-input" type="radio" name="m3" disabled />
+            <div class="mode-pics"><i class="mode-pic">수</i><i class="mode-pic is-any">?</i></div>
+            <div class="mode-name">랜덤</div>
+            <div class="mode-desc">아무나 만나기</div>
+          </label>
+        </div>
+        <div class="opens is-open"><b>방코드 입력</b> · <b>방 만들기</b>가 열립니다</div>
+        <p class="case-note">
+          고른 쪽에 타일처럼 색이 찹니다. 안 고른 쪽은 흰 칸으로 남습니다.
+          <b>색만으로 구분하지 않습니다</b> — 아래 줄에 무엇이 열렸는지가 글로 같이 나옵니다.
+        </p>
+      </article>
+
+      <!-- 4 -->
+      <article class="case">
+        <p class="case-name"><i class="mark is-ok"></i>4 · 랜덤 고름</p>
+        <label class="field-label">모드</label>
+        <div class="modes">
+          <label class="mode">
+            <input class="mode-input" type="radio" name="m4" disabled />
+            <div class="mode-pics"><i class="mode-pic">수</i><i class="mode-pic">엘</i></div>
+            <div class="mode-name">친구</div>
+            <div class="mode-desc">코드로 만나기</div>
+          </label>
+          <label class="mode">
+            <input class="mode-input" type="radio" name="m4" checked disabled />
+            <div class="mode-pics"><i class="mode-pic">수</i><i class="mode-pic is-any">?</i></div>
+            <div class="mode-name">랜덤</div>
+            <div class="mode-desc">아무나 만나기</div>
+          </label>
+        </div>
+        <div class="opens is-open"><b>매칭 시작</b>이 열립니다</div>
+        <p class="case-note">
+          랜덤 쪽 두 번째 자리는 <b>점선에 물음표</b>입니다.
+          누가 올지 모른다는 뜻이고, ④ 매칭 화면의 상대 자리와 같은 모양입니다.
+          <b>같은 뜻은 같은 모양으로</b> 그려야 배울 게 줄어듭니다.
+        </p>
+      </article>
+
+      <!-- 5 -->
+      <article class="case">
+        <p class="case-name"><i class="mark is-wait"></i>5 · 바꿔 고름</p>
+        <label class="field-label">모드</label>
+        <div class="modes">
+          <label class="mode">
+            <input class="mode-input" type="radio" name="m5" disabled />
+            <div class="mode-pics"><i class="mode-pic">수</i><i class="mode-pic">엘</i></div>
+            <div class="mode-name">친구</div>
+            <div class="mode-desc">코드로 만나기</div>
+          </label>
+          <label class="mode">
+            <input class="mode-input" type="radio" name="m5" checked disabled />
+            <div class="mode-pics"><i class="mode-pic">수</i><i class="mode-pic is-any">?</i></div>
+            <div class="mode-name">랜덤</div>
+            <div class="mode-desc">아무나 만나기</div>
+          </label>
+        </div>
+        <div class="opens is-open"><b>매칭 시작</b>이 열립니다</div>
+        <p class="hint">친구 모드에서 하던 건 지웠어요</p>
+        <p class="case-note">
+          친구를 고른 뒤 방코드까지 치다가 랜덤으로 바꾼 경우입니다.
+          <b>아래에 열려 있던 것은 닫고 비웁니다.</b> 안 그러면 랜덤 화면 밑에
+          아까 치던 방코드가 남아 있게 됩니다. 그리고 한 줄로 알려줍니다 —
+          말없이 지우면 사용자는 자기 입력이 어디 갔는지 찾습니다.
+        </p>
+      </article>
+
+    </div>
+  </section>
+
+  <!-- ── 무엇이 열리는가 ─────────────────────────────────── -->
+  <section class="section">
+    <h2>고르면 무엇이 열리나</h2>
+    <p class="lede">
+      이 조각이 중요한 진짜 이유입니다. <b>선택 하나가 그 다음 화면 전체를 바꿉니다.</b>
+      파란 칸은 두 갈래가 공유하는 단계입니다.
+    </p>
+
+    <div class="flow">
+      <article class="branch">
+        <h3>친구를 고르면</h3>
+        <div class="step is-same"><i class="step-no">①</i>닉네임 정하기</div>
+        <div class="step"><i class="step-no">③</i>방 만들기 → 코드 받기 → 친구에게 알려주기</div>
+        <div class="step"><i class="step-no">②</i><b>또는</b> 친구가 준 코드 넣고 들어가기</div>
+        <div class="step is-same"><i class="step-no">→</i>게임 화면</div>
+        <p>
+          친구 모드 안에서 <b>또 한 번 갈립니다</b> — 방을 만드는 사람과 들어가는 사람.
+          그래서 ②와 ③을 따로 그렸습니다.
+        </p>
+      </article>
+
+      <article class="branch">
+        <h3>랜덤을 고르면</h3>
+        <div class="step is-same"><i class="step-no">①</i>닉네임 정하기</div>
+        <div class="step"><i class="step-no">④</i>매칭 시작 → 기다리기</div>
+        <div class="step is-same"><i class="step-no">→</i>게임 화면</div>
+        <p>
+          한 갈래뿐이라 훨씬 짧습니다. 대신 <b>기다리는 시간</b>이 있어서
+          그 시간을 다루는 화면이 필요했습니다.
+        </p>
+      </article>
+    </div>
+  </section>
+
+  <!-- ── 눌러보기 ────────────────────────────────────────── -->
+  <section class="section">
+    <h2>눌러보기</h2>
+    <p class="lede">
+      직접 골라보세요. 키보드 방향키로도 옮겨집니다.
+      <b>모양만 확인하는 미리보기입니다</b> — 어디에도 연결되어 있지 않습니다.
+    </p>
+
+    <div class="play">
+      <div class="play-stage">
+        <label class="field-label">모드</label>
+        <div class="modes" id="modes">
+          <label class="mode">
+            <input class="mode-input" type="radio" name="live" value="friend" />
+            <div class="mode-pics"><i class="mode-pic">수</i><i class="mode-pic">엘</i></div>
+            <div class="mode-name">친구</div>
+            <div class="mode-desc">코드로 만나기</div>
+          </label>
+          <label class="mode">
+            <input class="mode-input" type="radio" name="live" value="random" />
+            <div class="mode-pics"><i class="mode-pic">수</i><i class="mode-pic is-any">?</i></div>
+            <div class="mode-name">랜덤</div>
+            <div class="mode-desc">아무나 만나기</div>
+          </label>
+        </div>
+        <div class="opens" id="opens">모드를 고르면 여기에 다음 단계가 열려요</div>
+        <p class="hint" id="hint"></p>
+      </div>
+
+      <div class="switch">
+        <p class="switch-label">상태 바꿔보기</p>
+        <button class="chip" type="button" data-state="locked" aria-pressed="false">잠김</button>
+        <button class="chip" type="button" data-state="none" aria-pressed="true">안 고름</button>
+        <button class="chip" type="button" data-state="friend" aria-pressed="false">친구</button>
+        <button class="chip" type="button" data-state="random" aria-pressed="false">랜덤</button>
+      </div>
+    </div>
+  </section>
+
+  <!-- ── 규칙 ────────────────────────────────────────────── -->
+  <section class="section">
+    <h2>정해둔 규칙</h2>
+    <p class="lede">숫자와 문구는 여기에 적힌 대로 화면에 박아둡니다. 바꾸려면 이 표부터 고칩니다.</p>
+
+    <div class="table-scroll">
+      <table>
+        <thead>
+          <tr><th>항목</th><th>값</th><th>왜</th></tr>
+        </thead>
+        <tbody>
+          <tr><td>고를 수 있는 수</td><td>둘 중 하나만</td><td>기획의 "택 1"입니다. 동시에 둘일 수 없습니다.</td></tr>
+          <tr><td>기본값</td><td>없음</td><td>하나를 켜둔 채 시작하면 <b>고른 줄 모르고</b> 넘어갑니다. 친구랑 하려던 사람이 랜덤으로 들어가 버립니다.</td></tr>
+          <tr><td>잠김 조건</td><td>닉네임 확인 전</td><td>기획 순서가 닉네임 → 모드입니다. 순서를 글 대신 화면으로 보여줍니다.</td></tr>
+          <tr><td>바꿔 골랐을 때</td><td>아래 내용 비우고 한 줄 안내</td><td>말없이 지우면 사용자는 자기 입력이 어디 갔는지 찾습니다.</td></tr>
+          <tr><td>키보드</td><td>방향키로 이동</td><td>진짜 라디오 버튼을 안 보이게 깔아두면 저절로 됩니다.</td></tr>
+          <tr><td>고른 표시</td><td>색 + 아래 글</td><td>색만 쓰면 색을 구분하기 어려운 사람은 무엇이 골라졌는지 모릅니다.</td></tr>
+          <tr><td>컴퓨터 모드</td><td>지금은 없음</td><td>기획에서 지우셨습니다. 나중에 넣으면 칸이 셋이 되고, 그때는 세로로 쌓는 게 나을 수 있습니다.</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </section>
+
+  <p class="colophon">Scrabble · Lobby Mode</p>
+
+</div>
+</div>
+
+<script>
+  // 미리보기용입니다. 화면이 어떻게 보이는지만 확인하는 코드고,
+  // 실제 기능은 나중에 따로 붙입니다.
+  (function () {
+    var modes  = document.getElementById('modes');
+    var inputs = [].slice.call(modes.querySelectorAll('.mode-input'));
+    var opens  = document.getElementById('opens');
+    var hint   = document.getElementById('hint');
+    var chips  = document.querySelectorAll('.chip');
+
+    var last = null;   // 직전에 고른 모드. 바뀌었는지 알려면 기억해야 합니다.
+
+    var OPENS = {
+      friend: '<b>방코드 입력</b> · <b>방 만들기</b>가 열립니다',
+      random: '<b>매칭 시작</b>이 열립니다'
+    };
+
+    function draw(state) {
+      var locked = (state === 'locked');
+      modes.className = 'modes' + (locked ? ' is-locked' : '');
+      inputs.forEach(function (input) { input.disabled = locked; });
+
+      var picked = (state === 'friend' || state === 'random') ? state : null;
+      inputs.forEach(function (input) { input.checked = (input.value === picked); });
+
+      if (locked) {
+        opens.className = 'opens';
+        opens.textContent = '모드를 고르면 여기에 다음 단계가 열려요';
+        hint.className = 'hint';
+        hint.textContent = '닉네임을 먼저 정해주세요';
+      } else if (picked) {
+        opens.className = 'opens is-open';
+        opens.innerHTML = OPENS[picked];
+        // 모드를 바꿔 골랐을 때만 "지웠다"고 알려줍니다.
+        if (last && last !== picked) {
+          hint.className = 'hint';
+          hint.textContent = (last === 'friend' ? '친구' : '랜덤') + ' 모드에서 하던 건 지웠어요';
+        } else {
+          hint.className = 'hint';
+          hint.textContent = '';
+        }
+      } else {
+        opens.className = 'opens';
+        opens.textContent = '모드를 고르면 여기에 다음 단계가 열려요';
+        hint.className = 'hint';
+        hint.textContent = '';
+      }
+
+      last = picked;
+      press(state);
+    }
+
+    function press(state) {
+      chips.forEach(function (chip) {
+        chip.setAttribute('aria-pressed', String(chip.dataset.state === state));
+      });
+    }
+
+    inputs.forEach(function (input) {
+      input.addEventListener('change', function () { draw(input.value); });
+    });
+
+    chips.forEach(function (chip) {
+      chip.addEventListener('click', function () {
+        if (chip.dataset.state === 'none' || chip.dataset.state === 'locked') last = null;
+        draw(chip.dataset.state);
+      });
+    });
+
+    draw('none');
+  })();
+</script>
