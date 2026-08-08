@@ -6,19 +6,22 @@
   <title>대기실 — 스크래블</title>
   <!-- 화면 겉모습(CSS)은 styles.css 로 분리했습니다. 디자인만 고칠 땐 그 파일만 열면 됩니다. -->
   <link rel="stylesheet" href="styles.css" />
+  <!-- 채팅은 대기실·게임 화면이 함께 쓰는 모듈입니다. 두 화면이 같은 파일을 불러 씁니다. -->
+  <link rel="stylesheet" href="chat/chat.css" />
 </head>
 <body>
 
 <!--
   대기실 페이지 — design/pages/lobby.html 에서 그린 화면을 실제 앱으로 옮긴 것입니다.
-    ① 닉네임 + 중복확인   ← 여기만 진짜 백엔드를 부릅니다
-    ─ 모드 선택
-    ② 방코드 입력 + 입장   ← 아직 목(mock)
-    ③ 방 생성 + 코드 공유  ← 아직 목(mock)
-    ④ 랜덤 매칭            ← 아직 목(mock)
+    ① 닉네임 (로그인 / 새로 만들기)  ← 진짜 백엔드를 부릅니다
+    ─ 모드 선택                      ← 화면 안에서만 고르는 것이라 서버가 필요 없습니다
+    ② 방코드 입력 + 입장             ← 잠김: 방 API 없음
+    ③ 방 생성 + 코드 공유            ← 잠김: 방 API 없음
+    ④ 랜덤 매칭                      ← 잠김: 매칭 API 없음
 
-  목으로 남은 칸들은 백엔드에 해당 API가 아직 없어서입니다.
-  API 가 생기면 그 기능 하나씩 진짜 호출로 바꿔 끼우면 됩니다.
+  가짜 값(목 데이터)은 넣지 않습니다. 없는 값을 지어내 보여주면 되는 것처럼
+  보이다가, 진짜 API 가 붙는 순간 조용히 어긋납니다. 그래서 아직 못 하는 일은
+  버튼을 잠그고 왜 잠갔는지 화면에 밝힙니다.
 -->
 
 <div class="board">
@@ -59,7 +62,13 @@
 
   </div>
 
+  <!-- 채팅이 붙는 자리. 안에 들어갈 것은 chat/chat.js 가 만듭니다. -->
+  <div class="lobby-chat" id="chatBox"></div>
+
 </div>
+
+<!-- 채팅 모듈 — 아래 대기실 코드보다 먼저 읽혀야 합니다. -->
+<script src="chat/chat.js"></script>
 
 <script>
   (function () {
@@ -68,13 +77,13 @@
     // 백엔드 주소가 바뀌면 이 한 줄만 고치면 됩니다.
     var API_BASE = "http://100.115.173.118:11000";
 
-    // ── 아직 목(mock)인 값 — 백엔드에 API 가 생기면 지웁니다 ─
-    var LIVE_ROOM = 'A7K2';   // 통하는 방코드
-    var QUEUE     = 3;        // 랜덤 대기 인원
-
     var NICK_MAX = 12;
     var CODE_LEN = 4;
     var LETTERS  = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';   // O·0·I·1 은 뺍니다
+
+    // 방·매칭은 백엔드에 API 가 아직 없습니다. 없는 값을 지어내 보여주면
+    // 되는 것처럼 보이다가 나중에 조용히 어긋나므로, 잠그고 이유를 밝힙니다.
+    var WAITING_API = '백엔드에 방·매칭 API 가 생기면 열립니다';
 
     // ── 지금 어디까지 왔는지 ────────────────────────────
     var s = {
@@ -108,6 +117,45 @@
       renderStep1();
       renderStep2();
       renderStep3();
+      syncChat();
+    }
+
+    // ── 채팅 ────────────────────────────────────────────
+    // 채팅 자체는 chat/chat.js 가 다 합니다. 게임 화면도 같은 파일을
+    // 쓰게 됩니다. 여기서 정하는 것은 "언제 붙이고 언제 떼는지"뿐입니다.
+    var chat = null;
+    var chatFoe = null;   // 채팅에 이미 알린 상대
+
+    function syncChat() {
+      // 닉네임이 정해지기 전에는 띄우지 않습니다.
+      // 누가 한 말인지 가를 기준이 아직 없기 때문입니다.
+      if (!s.nick) {
+        if (chat) { chat = chat.destroy(); chatFoe = null; }
+        return;
+      }
+
+      if (!chat) {
+        chat = Chat.mount('#chatBox', {
+          me: s.nick,
+          title: '대기실 채팅',
+          height: '260px',
+          // 아직 서버에 붙지 않았으므로 '연결 끊김'으로 둡니다.
+          // 그래야 입력칸이 잠겨서, 보내지지도 않을 글을 치지 않게 됩니다.
+          status: 'offline',
+          onSend: function (text) {
+            // ★ 여기가 백엔드로 나가는 문입니다.
+            //   웹소켓 명세서가 오면 이 안에서 socket.send(...) 를 합니다.
+          }
+        });
+        chat.system('아직 서버에 연결되지 않았습니다');
+      }
+
+      // 상대가 들어오면 한 번만 알립니다.
+      if (s.foe && s.foe !== chatFoe) {
+        chatFoe = s.foe;
+        chat.system(s.foe + ' 님이 들어왔습니다');
+      }
+      if (!s.foe) chatFoe = null;
     }
 
     function renderStepper() {
@@ -137,15 +185,20 @@
         return;
       }
 
+      // 들어오는 길이 둘입니다.
+      //   로그인      — 전에 만들어 둔 닉네임으로 다시 들어오기
+      //   새로 만들기 — 처음 온 사람이 닉네임을 등록하기
       body.innerHTML =
         '<div class="field-row">' +
           '<input class="field" id="nick" type="text" maxlength="' + NICK_MAX + '" ' +
                  'placeholder="닉네임을 입력하세요" autocomplete="off" />' +
-          '<button class="btn-check" id="nickBtn" type="button">중복확인</button>' +
+          '<button class="btn-check" id="loginBtn" type="button">로그인</button>' +
+          '<button class="btn-check is-plain" id="newBtn" type="button">새로 만들기</button>' +
         '</div>' +
         '<p class="hint" id="nickHint"><span class="counter">0 / ' + NICK_MAX + '</span></p>';
 
-      var input = $('nick'), btn = $('nickBtn'), hint = $('nickHint');
+      var input = $('nick'), hint = $('nickHint');
+      var loginBtn = $('loginBtn'), newBtn = $('newBtn');
 
       function valid(v) { return v.length > 0 && v.length <= NICK_MAX && !/\s/.test(v); }
 
@@ -160,25 +213,82 @@
         hint.appendChild(el('span', 'counter', input.value.length + ' / ' + NICK_MAX));
       }
 
+      // 요청을 보내는 동안은 두 버튼을 함께 잠급니다.
+      // 로그인과 만들기가 동시에 날아가면 어느 쪽 결과가 남는지 알 수 없습니다.
+      function lock(which, label) {
+        input.disabled = true;
+        loginBtn.disabled = true;
+        newBtn.disabled = true;
+        which.textContent = label;
+      }
+
       // 확인이 끝나 입력칸을 다시 쓸 수 있게 되돌립니다.
       function unlock() {
         input.disabled = false;
-        btn.textContent = '중복확인';
-        btn.disabled = false;
+        loginBtn.textContent = '로그인';
+        newBtn.textContent = '새로 만들기';
+        refresh();
+      }
+
+      // 쓸 만한 닉네임일 때만 두 버튼이 열립니다.
+      function refresh() {
+        var good = valid(input.value.trim());
+        loginBtn.disabled = !good;
+        newBtn.disabled = !good;
       }
 
       input.addEventListener('input', function () {
         var v = input.value;
-        btn.disabled = !valid(v);
+        refresh();
         if (v.length && !valid(v)) paint('bad', '공백 없이 1~' + NICK_MAX + '자로 입력해 주세요');
         else paint('', '');
       });
 
-      btn.addEventListener('click', function () {
+      // ── 로그인 — 이미 있는 닉네임으로 다시 들어오기 ────
+      function login() {
         var v = input.value.trim();
         if (!valid(v)) return;
 
-        btn.disabled = true; btn.textContent = '확인 중…'; input.disabled = true;
+        lock(loginBtn, '찾는 중…');
+        paint('wait', '그 닉네임이 있는지 알아보는 중이에요');
+
+        // 들어가려면 내 id 가 필요한데, 백엔드에 "닉네임으로 한 명 찾아주는"
+        // API 가 아직 없습니다. 그래서 전체 목록을 받아 프론트가 찾습니다.
+        // 사람이 많아지면 느려지므로, 나중에 그런 API 를 백엔드에 요청하는
+        // 편이 좋습니다. (중복확인 API 는 있냐/없냐만 답하고 id 는 안 줍니다)
+        fetch(API_BASE + '/api/players')
+          .then(function (res) {
+            if (!res.ok) throw new Error('서버 오류 (상태 코드 ' + res.status + ')');
+            return res.json();
+          })
+          .then(function (players) {
+            // find = 조건에 맞는 첫 번째 하나. 없으면 undefined.
+            var me = players.find(function (p) { return p.nickname === v; });
+
+            if (!me) {
+              unlock();
+              paint('bad', '그런 닉네임이 없어요. 처음이면 새로 만들기를 눌러주세요');
+              input.focus(); input.select();
+              return;
+            }
+
+            // 백엔드가 준 모양: { id, nickname, created_at }
+            s.nick = me.nickname;
+            s.playerId = me.id;
+            render();
+          })
+          .catch(function (e) {
+            unlock();
+            paint('bad', '들어가지 못했어요 — ' + e.message);
+          });
+      }
+
+      // ── 새로 만들기 — 중복 확인 후 등록 ────────────────
+      function createNew() {
+        var v = input.value.trim();
+        if (!valid(v)) return;
+
+        lock(newBtn, '확인 중…');
         paint('wait', '쓸 수 있는 닉네임인지 알아보는 중이에요');
 
         // 1단계 — 중복 확인 전용 API 에 물어봅니다. (GET)
@@ -211,7 +321,7 @@
             unlock();
             paint('bad', '확인하지 못했어요 — ' + e.message);
           });
-      });
+      }
 
       function savePlayer(nickname) {
         return fetch(API_BASE + '/api/players', {
@@ -236,7 +346,16 @@
           });
       }
 
-      btn.disabled = true;
+      loginBtn.addEventListener('click', login);
+      newBtn.addEventListener('click', createNew);
+
+      // 엔터는 로그인으로 보냅니다. 새로 만드는 일은 한 번뿐이지만
+      // 다시 들어오는 일은 올 때마다 있기 때문입니다.
+      input.addEventListener('keydown', function (e) {
+        if (e.key === 'Enter') login();
+      });
+
+      refresh();
       paint('', '');
     }
 
@@ -279,7 +398,7 @@
         '</label>';
       }
       var meTile = '<i class="mode-pic">' + (s.nick ? esc(s.nick.charAt(0)) : '나') + '</i>';
-      return one('friend', meTile + '<i class="mode-pic">엘</i>', '친구', '코드로 만나기') +
+      return one('friend', meTile + '<i class="mode-pic">친</i>', '친구', '코드로 만나기') +
              one('random', meTile + '<i class="mode-pic is-any">?</i>', '랜덤', '아무나 만나기');
     }
 
@@ -294,7 +413,8 @@
     }
 
     // ③ 방 만들기 + ② 코드 입력 — 친구 모드는 두 갈래입니다.
-    // (아직 목(mock)입니다 — 방 API 가 생기면 이 안의 later(...) 들을 fetch 로 바꿉니다)
+    // 아래 '방 만드는 중'·'기다리는 중' 화면은 그려는 두었지만 지금은 닿지
+    // 않습니다. 거기까지 데려다 줄 방 API 가 아직 없기 때문입니다.
     function renderFriend(box) {
 
       // 상대가 들어왔으면 자리표만 남깁니다.
@@ -358,22 +478,11 @@
           '</div>' +
           '<p class="hint" id="codeHint"></p>' +
           '<p class="or">또는</p>' +
-          '<button class="btn-wide" id="make" type="button">방 만들기</button>' +
-          '<p class="hint is-mid">방을 만들면 네 글자 코드가 나와요</p>' +
+          '<button class="btn-wide" id="make" type="button" disabled>방 만들기</button>' +
+          '<p class="hint is-mid">' + WAITING_API + '</p>' +
         '</div>';
 
       wireCode();
-
-      $('make').addEventListener('click', function () {
-        s.phase = 'making';
-        render();
-        later(function () {
-          s.room = newCode(); s.phase = 'hosting';
-          render();
-          // 친구가 들어옵니다. (진짜로는 언제 올지 모릅니다)
-          later(function () { s.foe = '엘리'; render(); }, 4000);
-        }, 900);
-      });
     }
 
     function cells() {
@@ -394,10 +503,14 @@
 
       function code() { return cs.map(function (c) { return c.value; }).join(''); }
 
+      // 코드를 다 채워도 입장은 아직 잠겨 있습니다.
+      // "그런 방이 있는지" 물어볼 백엔드 API 가 아직 없기 때문입니다.
+      // 치고·지우고·붙여넣는 일은 프론트 몫이라 그대로 둡니다.
       function refresh() {
-        enter.disabled = code().length < CODE_LEN;
+        enter.disabled = true;
         row.className = 'code-row';
-        hint.className = 'hint'; hint.textContent = '';
+        hint.className = 'hint';
+        hint.textContent = code().length < CODE_LEN ? '' : WAITING_API;
       }
 
       cs.forEach(function (cell, i) {
@@ -421,39 +534,10 @@
         });
       });
 
-      enter.addEventListener('click', function () {
-        var typed = code();
-        enter.disabled = true; enter.textContent = '확인 중…';
-        cs.forEach(function (c) { c.disabled = true; });
-        hint.className = 'hint is-wait';
-        hint.innerHTML = '';
-        hint.appendChild(el('span', 'waiting'));
-        hint.appendChild(document.createTextNode(' 그런 방이 있는지 알아보는 중이에요'));
-
-        later(function () {
-          if (typed === LIVE_ROOM) {
-            s.room = typed; s.foe = '엘리';
-            render();
-            return;
-          }
-          // 없는 방 — 흔들고 비우고 첫 칸으로 돌려보냅니다.
-          cs.forEach(function (c) { c.disabled = false; });
-          enter.textContent = '입장';
-          row.className = 'code-row is-bad is-shake';
-          hint.className = 'hint is-bad';
-          hint.innerHTML = '';
-          hint.appendChild(el('span', 'hint-icon', '!'));
-          hint.appendChild(document.createTextNode(' 그런 방이 없어요. 코드를 다시 확인해 주세요'));
-          later(function () {
-            cs.forEach(function (c) { c.value = ''; });
-            row.className = 'code-row';
-            cs[0].focus();
-          }, 600);
-        }, 700);
-      });
+      refresh();
     }
 
-    // ④ 랜덤 매칭 — 아직 목(mock)입니다.
+    // ④ 랜덤 매칭 — '찾는 중' 화면도 매칭 API 가 생겨야 닿습니다.
     function renderRandom(box) {
       if (s.foe) {
         box.innerHTML = '<div class="split">' + versus(s.foe, 'found') + '</div>';
@@ -466,7 +550,6 @@
             versus(null, 'hunting') +
             '<p class="elapsed" id="clock">00:00</p>' +
             '<button class="btn-wide is-quiet" id="stopMatch" type="button">취소</button>' +
-            '<p class="queue"><i class="queue-dot"></i>지금 <b>' + (QUEUE - 1) + '</b>명이 상대를 찾고 있어요</p>' +
           '</div>';
 
         var n = 0, clockEl = $('clock');
@@ -491,16 +574,9 @@
       box.innerHTML =
         '<div class="split">' +
           versus(null, 'empty') +
-          '<button class="btn-wide" id="startMatch" type="button">매칭 시작</button>' +
-          '<p class="queue"><i class="queue-dot"></i>지금 <b>' + QUEUE + '</b>명이 상대를 찾고 있어요</p>' +
-          '<p class="hint is-mid"></p>' +
+          '<button class="btn-wide" id="startMatch" type="button" disabled>매칭 시작</button>' +
+          '<p class="hint is-mid">' + WAITING_API + '</p>' +
         '</div>';
-
-      $('startMatch').addEventListener('click', function () {
-        s.phase = 'hunting';
-        render();
-        later(function () { s.foe = '은우'; s.phase = null; render(); }, 6000);
-      });
     }
 
     // 두 사람 자리 — 친구·랜덤이 같은 모양을 씁니다.
@@ -577,12 +653,6 @@
     function mmss(t) {
       var m = Math.floor(t / 60), x = t % 60;
       return (m < 10 ? '0' + m : m) + ':' + (x < 10 ? '0' + x : x);
-    }
-
-    function newCode() {
-      var out = '';
-      for (var i = 0; i < CODE_LEN; i++) out += LETTERS[Math.floor(Math.random() * LETTERS.length)];
-      return out;
     }
 
     render();

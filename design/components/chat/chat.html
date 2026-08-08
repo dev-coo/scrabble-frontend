@@ -1,0 +1,297 @@
+<!-- @dsCard group="채팅 (Chat)" viewport="1280x2000" name="채팅 모듈" subtitle="대기실·게임 화면이 함께 쓰는 한 벌 · 상태 6종 · 눌러보기" -->
+<!--
+  채팅 모듈 — 미리보기
+
+  이 파일은 "보여주기용 포장지"입니다. 진짜 알맹이는 저장소 뿌리의
+    /chat/chat.css   (모양)
+    /chat/chat.js    (동작)
+  두 파일이고, 여기서도 실제 앱(index.html)에서도 똑같은 그 파일을
+  불러 씁니다. 그래서 이 미리보기에서 보이는 모습이 곧 앱의 모습입니다.
+
+  서버는 부르지 않습니다. 아래 상대의 답장은 흉내(mock)입니다.
+-->
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>채팅 모듈 — 스크래블</title>
+
+<!-- ① 색·글꼴 토큰 -->
+<link rel="stylesheet" href="../../styles.css" />
+<!-- ② 채팅 모듈 본체 — 앱과 같은 파일 -->
+<link rel="stylesheet" href="../../../chat/chat.css" />
+
+<style>
+*{box-sizing:border-box}
+body{margin:0;padding:0;background:var(--paper);color:var(--ink);font-family:var(--font-text);line-height:1.6;-webkit-font-smoothing:antialiased}
+.board{min-height:100vh;padding:40px 28px 72px}
+.wrap{max-width:1000px;margin:0 auto}
+
+/* ── 문서 머리 ─────────────────────────────────────────── */
+.doc-head{padding-bottom:34px;border-bottom:2px solid var(--rule)}
+.tiles{display:flex;flex-wrap:wrap;gap:0;margin:0 0 22px}
+.tile{width:var(--cell);height:var(--cell);display:grid;place-items:center;background:var(--theme);border:1px solid var(--rule);margin:-1px 0 0 -1px;font-family:var(--font-display);font-weight:700;font-size:20px;color:var(--ink)}
+.crumb{margin:0 0 10px;font-family:var(--font-mono);font-size:11px;letter-spacing:var(--track-caps);text-transform:uppercase;color:var(--ink-soft)}
+.doc-head h1{margin:0 0 12px;font-family:var(--font-display);font-weight:700;font-size:34px;letter-spacing:-.01em}
+.doc-head p{margin:0;max-width:58ch;color:var(--ink-soft);font-size:15px;text-wrap:pretty}
+
+/* ── 구역 ──────────────────────────────────────────────── */
+.section{margin-top:56px}
+.section>h2{display:inline-block;margin:0 0 10px;padding:5px 12px;background:var(--theme);border:1px solid var(--rule);font-family:var(--font-display);font-size:12px;font-weight:700;letter-spacing:var(--track-caps);text-transform:uppercase}
+.section>.lede{margin:0 0 26px;max-width:62ch;font-size:15px;color:var(--ink-soft);text-wrap:pretty}
+
+/* ── 시연 칸 ───────────────────────────────────────────── */
+.demo{max-width:420px}
+.grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(300px,1fr));gap:26px}
+.case{min-width:0}
+.case>h3{margin:0 0 4px;font-family:var(--font-mono);font-size:11px;letter-spacing:var(--track-caps);text-transform:uppercase;color:var(--ink)}
+.case>p{margin:0 0 12px;font-size:13px;color:var(--ink-soft);text-wrap:pretty}
+
+/* ── 조종 버튼 ─────────────────────────────────────────── */
+.knobs{display:flex;flex-wrap:wrap;gap:8px;margin-top:14px}
+.knob{padding:7px 12px;font-family:var(--font-mono);font-size:10.5px;letter-spacing:var(--track-caps);text-transform:uppercase;
+  color:var(--ink);background:transparent;border:1px solid var(--rule);border-radius:0;cursor:pointer}
+.knob:hover{background:var(--theme-tint)}
+
+/* ── 규칙 표 ───────────────────────────────────────────── */
+.rules{width:100%;border-collapse:collapse;font-size:14px}
+.rules th,.rules td{padding:11px 12px;border:1px solid var(--grid);text-align:left;vertical-align:top}
+.rules th{background:var(--paper-2);font-family:var(--font-mono);font-size:10.5px;letter-spacing:var(--track-caps);text-transform:uppercase;font-weight:400;color:var(--ink-soft);white-space:nowrap}
+.rules code{font-family:var(--font-mono);font-size:12.5px;background:var(--theme-tint);padding:1px 5px}
+
+/* ── 코드 예시 ─────────────────────────────────────────── */
+pre{margin:0;padding:16px 18px;overflow-x:auto;background:var(--paper-2);border:1.5px solid var(--rule);
+  font-family:var(--font-mono);font-size:12.5px;line-height:1.7}
+pre b{font-weight:700;background:var(--theme)}
+</style>
+
+<div class="board">
+<div class="wrap">
+
+  <header class="doc-head">
+    <div class="tiles" aria-hidden="true">
+      <div class="tile">C</div><div class="tile">H</div><div class="tile">A</div><div class="tile">T</div>
+    </div>
+    <p class="crumb">채팅 · 공용 모듈</p>
+    <h1>채팅 모듈</h1>
+    <p>
+      대기실과 게임 화면이 <b>같은 한 벌</b>을 나눠 씁니다.
+      화면마다 따로 만들면 나중에 말풍선 하나 고치는 데 두 군데를 손대야 하고,
+      한쪽만 고치면 두 화면이 서로 달라집니다.
+    </p>
+  </header>
+
+  <!-- ── 살아있는 예제 ────────────────────────────────── -->
+  <section class="section">
+    <h2>눌러보기</h2>
+    <p class="lede">
+      실제로 쳐서 보내보세요. 상대(엘리)가 잠시 뒤 답합니다 —
+      <b>흉내(mock)입니다.</b> 서버를 부르지 않습니다.
+    </p>
+
+    <div class="demo" id="live"></div>
+
+    <div class="knobs">
+      <button class="knob" id="kOffline" type="button">연결 끊기</button>
+      <button class="knob" id="kOnline" type="button">다시 연결</button>
+      <button class="knob" id="kJoin" type="button">입장 알림</button>
+      <button class="knob" id="kTyping" type="button">입력 중 표시</button>
+      <button class="knob" id="kFold" type="button">접기 / 펼치기</button>
+      <button class="knob" id="kClear" type="button">비우기</button>
+    </div>
+  </section>
+
+  <!-- ── 상태별 모습 ──────────────────────────────────── -->
+  <section class="section">
+    <h2>상태</h2>
+    <p class="lede">각 상태가 화면에서 어떻게 다른지 나란히 둔 것입니다.</p>
+
+    <div class="grid">
+      <div class="case">
+        <h3>비어 있음</h3>
+        <p>아직 아무 말도 오가지 않은 처음 모습.</p>
+        <div id="cEmpty"></div>
+      </div>
+
+      <div class="case">
+        <h3>연결됨</h3>
+        <p>왼쪽 위 네모가 초록. 내 말은 오른쪽, 상대 말은 왼쪽.</p>
+        <div id="cOnline"></div>
+      </div>
+
+      <div class="case">
+        <h3>연결 중</h3>
+        <p>네모가 깜빡입니다. 보내기는 아직 됩니다.</p>
+        <div id="cConnecting"></div>
+      </div>
+
+      <div class="case">
+        <h3>연결 끊김</h3>
+        <p>입력칸을 아예 잠급니다. 칠 수 있게 두면 보내고 나서야 실패를 압니다.</p>
+        <div id="cOffline"></div>
+      </div>
+
+      <div class="case">
+        <h3>접힘 + 안 읽음</h3>
+        <p>접어둔 동안 들어온 말의 수를 머리줄에 표시합니다.</p>
+        <div id="cFolded"></div>
+      </div>
+
+      <div class="case">
+        <h3>상대가 입력 중</h3>
+        <p>점 세 개가 순서대로 켜집니다.</p>
+        <div id="cTyping"></div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ── 규칙 ─────────────────────────────────────────── -->
+  <section class="section">
+    <h2>정한 규칙</h2>
+    <p class="lede">모양을 정할 때 같이 정한 것들입니다.</p>
+
+    <table class="rules">
+      <tr>
+        <th>같은 사람이<br />연달아 말하면</th>
+        <td>이름을 다시 쓰지 않고 말풍선만 잇습니다. 줄마다 이름이 붙으면 정작 내용이 눈에 안 들어옵니다.</td>
+      </tr>
+      <tr>
+        <th>위로 올려<br />읽는 중일 때</th>
+        <td>새 말이 와도 화면을 아래로 끌어내리지 않습니다. 대신 <code>새 메시지 ↓</code> 버튼을 띄웁니다. 읽던 자리를 뺏지 않기 위해서입니다.</td>
+      </tr>
+      <tr>
+        <th>내가 보낸 말</th>
+        <td>항상 맨 아래로 따라갑니다. 방금 내가 한 일의 결과는 보여야 합니다.</td>
+      </tr>
+      <tr>
+        <th>연결이 끊기면</th>
+        <td>입력칸을 잠급니다. 보낼 수 없는 상태에서 글을 치게 두면 헛수고가 됩니다.</td>
+      </tr>
+      <tr>
+        <th>연결 상태를<br />색으로만 알리지 않음</th>
+        <td>색 네모 옆에 눈에 안 보이는 글자(<code>연결됨</code>·<code>연결 끊김</code>)를 같이 넣어 화면 읽어주는 프로그램이 읽습니다.</td>
+      </tr>
+      <tr>
+        <th>글자 수</th>
+        <td>200자까지. 입력칸 오른쪽에 <code>0/200</code> 으로 항상 보입니다.</td>
+      </tr>
+      <tr>
+        <th>클래스 이름</th>
+        <td>전부 <code>chat-</code> 으로 시작합니다. 끼워 넣는 페이지에 <code>.field</code> 같은 흔한 이름이 있어도 부딪히지 않습니다.</td>
+      </tr>
+    </table>
+  </section>
+
+  <!-- ── 쓰는 법 ──────────────────────────────────────── -->
+  <section class="section">
+    <h2>쓰는 법</h2>
+    <p class="lede">
+      어느 페이지든 두 줄 불러오고 <code>mount</code> 한 번이면 끝입니다.
+      굵게 칠한 자리가 <b>나중에 웹소켓이 들어올 문</b>입니다.
+    </p>
+
+    <pre>&lt;link rel="stylesheet" href="chat/chat.css" /&gt;
+&lt;script src="chat/chat.js"&gt;&lt;/script&gt;
+
+var 채팅 = Chat.mount('#chatBox', {
+  me: '수진',                       // 어느 말이 내 것인지 가르는 기준
+  title: '대기실 채팅',
+  height: '300px',
+  <b>onSend: function (text) {         // 내가 보낼 때 → socket.send(...)</b>
+<b>    ...</b>
+<b>  }</b>
+});
+
+<b>채팅.receive({ from: '엘리', text: '안녕!' });   // 남이 보낼 때 → socket.onmessage 에서</b>
+채팅.system('엘리 님이 들어왔습니다');
+채팅.setStatus('offline');
+채팅.typing('엘리');   채팅.typing(null);
+채팅.setMe('새닉네임');
+채팅.close();   채팅.open();   채팅.clear();   채팅.destroy();</pre>
+  </section>
+
+  <!-- ── 아직 안 한 것 ────────────────────────────────── -->
+  <section class="section">
+    <h2>아직 안 한 것</h2>
+    <p class="lede">
+      <b>서버 연결.</b> 채팅은 웹소켓을 쓰게 되는데, 그 명세서
+      <code>docs/ws-contract.md</code> 가 아직 없습니다. 접속 주소와 메시지 형식을
+      추측해서 만들면 백엔드가 조금만 달리 만들어도 조용히 어긋납니다.
+      명세서가 오면 위 코드의 굵은 두 자리만 이으면 되고, 화면은 그대로 둡니다.
+    </p>
+  </section>
+
+</div>
+</div>
+
+<script src="../../../chat/chat.js"></script>
+<script>
+(function () {
+
+  // ── 눌러보기용 ─────────────────────────────────────
+  // 상대의 답장은 흉내(mock)입니다. 서버가 아닙니다.
+  var REPLIES = [
+    '오 좋아요',
+    '나 지금 타일 세 개 남았어요',
+    'Q 를 어디에 놓지…',
+    '그건 사전에 없는 단어 아니에요?',
+    '잠깐만요, 생각 중'
+  ];
+  var turn = 0;
+
+  var live = Chat.mount('#live', {
+    me: '수진',
+    title: '대기실 채팅',
+    height: '300px',
+    onSend: function () {
+      // 진짜였다면 여기서 socket.send(text) 를 합니다.
+      // 지금은 상대가 답하는 흉내만 냅니다.
+      setTimeout(function () { live.typing('엘리'); }, 500);
+      setTimeout(function () {
+        live.typing(null);
+        live.receive({ from: '엘리', text: REPLIES[turn++ % REPLIES.length] });
+      }, 1900);
+    }
+  });
+
+  live.system('엘리 님이 들어왔습니다');
+  live.receive({ from: '엘리', text: '안녕하세요! 한 판 해요' });
+
+  document.getElementById('kOffline').onclick = function () { live.setStatus('offline'); };
+  document.getElementById('kOnline').onclick  = function () { live.setStatus('online'); };
+  document.getElementById('kJoin').onclick    = function () { live.system('은우 님이 들어왔습니다'); };
+  document.getElementById('kTyping').onclick  = function () {
+    live.typing('엘리');
+    setTimeout(function () { live.typing(null); }, 2500);
+  };
+  document.getElementById('kFold').onclick    = function () { live.toggle(); };
+  document.getElementById('kClear').onclick   = function () { live.clear(); };
+
+  // ── 상태별 모습 ────────────────────────────────────
+  function sample(where, opts, fill) {
+    var c = Chat.mount(where, Object.assign({
+      me: '수진', title: '채팅', height: '180px', collapsible: false
+    }, opts));
+    if (fill) fill(c);
+    return c;
+  }
+
+  function talk(c) {
+    c.receive({ from: '엘리', text: '안녕하세요!' });
+    c.receive({ from: '엘리', text: '지금 시작할까요?' });
+    c.mine('네 좋아요');
+  }
+
+  sample('#cEmpty', {});
+  sample('#cOnline', {}, talk);
+  sample('#cConnecting', { status: 'connecting' }, talk);
+  sample('#cOffline', { status: 'offline' }, talk);
+
+  var folded = sample('#cFolded', { collapsible: true, open: false });
+  folded.receive({ from: '엘리', text: '어디 계세요?' });
+  folded.receive({ from: '엘리', text: '기다리고 있어요' });
+  folded.receive({ from: '은우', text: '곧 시작합니다' });
+
+  var typing = sample('#cTyping', {}, talk);
+  typing.typing('엘리');
+
+})();
+</script>
