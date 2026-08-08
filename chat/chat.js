@@ -18,15 +18,16 @@
    같이 쓰면 그런 일이 없습니다.
 
    ── 백엔드와의 경계 ──────────────────────────────────────
-   이 파일은 서버를 부르지 않습니다. 채팅은 웹소켓(WebSocket)을 쓰게
-   되는데, 그 명세서(docs/ws-contract.md)가 아직 없어서 접속 주소나
-   메시지 형식을 추측하지 않기로 했습니다.
+   이 파일은 서버를 부르지 않습니다. 어느 통로로 주고받을지는 이 모듈이
+   알 바가 아니고, 쓰는 쪽이 정합니다. 그래서 게임 화면이 다른 통로를
+   쓰게 되어도 이 파일은 그대로 둘 수 있습니다.
 
-   대신 주고받는 자리만 정해뒀습니다:
+   주고받는 자리는 이 둘입니다:
      내가 보낼 때  → onSend(text) 가 불립니다        (여기서 socket.send)
-     남이 보낼 때  → 채팅.receive({from, text}) 를 부르면 됩니다 (socket.onmessage 에서)
+     남이 보낼 때  → 채팅.receive({from, text, at}) 를 부르면 됩니다
 
-   명세서가 오면 이 두 자리만 이으면 되고, 화면 코드는 그대로입니다.
+   대기실(index.html)은 방·매칭 통로를 그대로 씁니다. 이미 두 사람이
+   그 통로로 이어져 있으니 채팅용 연결을 따로 열 이유가 없습니다.
    ───────────────────────────────────────────────────────────── */
 window.Chat = (function () {
   'use strict';
@@ -37,6 +38,9 @@ window.Chat = (function () {
     open: true,            // 처음에 펼쳐둘지
     collapsible: true,     // 접기 버튼을 보여줄지
     height: null,          // 대화 칸 높이 (예: '320px'). 없으면 CSS 기본값
+    // 화면 오른쪽 아래에 동그란 버튼으로 띄우고, 누를 때만 펼칩니다.
+    // 대기실·게임 화면처럼 채팅이 주인공이 아닌 곳에 씁니다.
+    float: false,
     maxLen: 200,
     placeholder: '메시지를 입력하세요',
     empty: '아직 대화가 없습니다',
@@ -91,7 +95,41 @@ window.Chat = (function () {
         '</div>' +
       '</div>';
 
-    host.appendChild(root);
+    // 떠 있는 모드일 때는 창과 동그란 버튼을 한 칸(dock)에 담습니다.
+    // 그 칸만 화면 구석에 고정하면 되고, 창 자체는 손대지 않아도 됩니다.
+    var dock = null, launcher = null, lbadge = null;
+    var outer = root;
+
+    if (o.float) {
+      dock = document.createElement('div');
+      dock.className = 'chat-dock';
+      dock.setAttribute('data-open', o.open ? 'yes' : 'no');
+      dock.appendChild(root);
+
+      launcher = document.createElement('button');
+      launcher.type = 'button';
+      launcher.className = 'chat-launcher';
+      launcher.innerHTML =
+        '<span class="chat-launcher-on" aria-hidden="true">' +
+          '<svg viewBox="0 0 24 24" width="24" height="24" fill="none" ' +
+               'stroke="currentColor" stroke-width="2" stroke-linejoin="round">' +
+            '<path d="M21 12a8 8 0 0 1-11.6 7.1L3 21l1.9-6.4A8 8 0 1 1 21 12z"/>' +
+          '</svg>' +
+        '</span>' +
+        '<span class="chat-launcher-off" aria-hidden="true">' +
+          '<svg viewBox="0 0 24 24" width="22" height="22" fill="none" ' +
+               'stroke="currentColor" stroke-width="2.2" stroke-linecap="round">' +
+            '<path d="M6 6l12 12M18 6L6 18"/>' +
+          '</svg>' +
+        '</span>' +
+        '<span class="chat-launcher-badge" data-x="lbadge"></span>';
+      dock.appendChild(launcher);
+
+      lbadge = launcher.querySelector('[data-x="lbadge"]');
+      outer = dock;
+    }
+
+    host.appendChild(outer);
 
     var $ = function (name) { return root.querySelector('[data-x="' + name + '"]'); };
     var log = $('log'), input = $('input'), send = $('send'), count = $('count');
@@ -139,23 +177,29 @@ window.Chat = (function () {
       if (e) log.removeChild(e);
     }
 
-    // 새 줄을 넣은 뒤 공통으로 하는 일
-    function settle(mine) {
+    // 새 줄을 넣은 뒤 공통으로 하는 일.
+    // counts = 안 읽음으로 셀지. 상대가 "한 말"만 셉니다 — 들어옴·나감 같은
+    // 알림까지 세면, 아무도 말을 안 걸었는데 숫자가 붙어 헷갈립니다.
+    function settle(mine, counts) {
       var stick = atBottom();
       if (stick || mine) toBottom();
       else root.setAttribute('data-behind', 'yes');
-      if (!isOpen && !mine) bump();
+      if (!isOpen && counts) bump();
     }
 
     function bump() {
       unread++;
-      badge.textContent = unread > 99 ? '99+' : String(unread);
+      var label = unread > 99 ? '99+' : String(unread);
+      badge.textContent = label;
       root.setAttribute('data-unread', 'yes');
+      // 떠 있는 모드에서는 창이 닫혀 있으므로 동그란 버튼에도 표시합니다.
+      if (lbadge) { lbadge.textContent = label; dock.setAttribute('data-unread', 'yes'); }
     }
 
     function clearUnread() {
       unread = 0;
       root.setAttribute('data-unread', 'no');
+      if (dock) dock.setAttribute('data-unread', 'no');
     }
 
     // ── 화면에 말 한 줄 붙이기 ──────────────────────────
@@ -177,7 +221,7 @@ window.Chat = (function () {
       box.appendChild(row);
 
       log.appendChild(box);
-      settle(mine);
+      settle(mine, !mine);
       return box;
     }
 
@@ -243,7 +287,7 @@ window.Chat = (function () {
         dropEmpty();
         lastKey = null;                       // 알림 뒤에는 이름을 다시 씁니다
         log.appendChild(el('p', 'chat-sys', text));
-        settle(false);
+        settle(false, false);
         return api;
       },
 
@@ -269,7 +313,9 @@ window.Chat = (function () {
       open: function () {
         isOpen = true;
         root.setAttribute('data-open', 'yes');
-        if (fold) fold.textContent = '접기';
+        if (dock) dock.setAttribute('data-open', 'yes');
+        if (launcher) launcher.setAttribute('aria-label', '채팅 닫기');
+        if (fold) fold.textContent = o.float ? '닫기' : '접기';
         clearUnread();
         toBottom();
         return api;
@@ -278,7 +324,9 @@ window.Chat = (function () {
       close: function () {
         isOpen = false;
         root.setAttribute('data-open', 'no');
-        if (fold) fold.textContent = '펼치기';
+        if (dock) dock.setAttribute('data-open', 'no');
+        if (launcher) launcher.setAttribute('aria-label', '채팅 열기');
+        if (fold) fold.textContent = o.float ? '닫기' : '펼치기';
         return api;
       },
 
@@ -296,15 +344,20 @@ window.Chat = (function () {
 
       /* 화면에서 통째로 떼어냅니다. */
       destroy: function () {
-        if (root.parentNode) root.parentNode.removeChild(root);
+        if (outer.parentNode) outer.parentNode.removeChild(outer);
         return null;
       },
 
       el: root
     };
 
+    if (launcher) {
+      launcher.addEventListener('click', function () { api.toggle(); });
+      launcher.setAttribute('aria-label', isOpen ? '채팅 닫기' : '채팅 열기');
+    }
+
     // ── 첫 모습 ──────────────────────────────────────────
-    if (fold) fold.textContent = isOpen ? '접기' : '펼치기';
+    if (fold) fold.textContent = o.float ? '닫기' : (isOpen ? '접기' : '펼치기');
     api.setStatus(o.status);
     showEmpty();
     refresh();

@@ -17,7 +17,7 @@
     ─ 모드 선택                      ← 화면 안에서만 고르는 것이라 서버가 필요 없습니다
     ② 방코드 입력 + 입장             ← 웹소켓으로 진짜 들어갑니다
     ③ 방 생성 + 코드 공유            ← 웹소켓으로 진짜 만듭니다
-    ④ 랜덤 매칭                      ← 잠김: 매칭 API 없음
+    ④ 랜덤 매칭                      ← 웹소켓으로 진짜 짝지어 줍니다
     ─ 채팅                           ← 웹소켓으로 진짜 주고받습니다
 
   가짜 값(목 데이터)은 넣지 않습니다. 없는 값을 지어내 보여주면 되는 것처럼
@@ -63,8 +63,9 @@
 
   </div>
 
-  <!-- 채팅이 붙는 자리. 안에 들어갈 것은 chat/chat.js 가 만듭니다. -->
-  <div class="lobby-chat" id="chatBox"></div>
+  <!-- 채팅이 붙는 자리. 안에 들어갈 것은 chat/chat.js 가 만듭니다.
+       떠 있는 모드라 이 자리가 어디든 화면 오른쪽 아래에 나타납니다. -->
+  <div id="chatBox"></div>
 
 </div>
 
@@ -84,17 +85,15 @@
 
     var NICK_MAX = 12;
     // 코드 입력칸 수.
-    // ⚠️ 2026-08-08 기준 백엔드는 아직 6자리를 발급합니다(예: 8XS79U).
-    //    백엔드가 4자리로 바뀔 예정이라 미리 4로 맞춰둔 값입니다.
-    //    그때까지는 코드로 입장하는 길이 막혀 있습니다 —
-    //    6자리 코드를 4칸에 넣을 수 없기 때문입니다.
+    // ⚠️ 2026-08-08 기준 백엔드가 발급하는 방 코드는 6자리입니다(예: 8XS79U).
+    //    4칸에는 6자리를 다 넣을 수 없어 코드로 입장하는 길이 막혀 있습니다.
+    //    (4자리는 랜덤 매칭 코드인데, 그건 서버가 알아서 짝지어 주므로
+    //     사람이 칠 일이 없습니다. 이 칸과는 무관합니다.)
+    //    방 코드가 4자리로 바뀌면 그때부터 입장이 바로 열립니다.
     // 헷갈리기 쉬운 O·I·L·0·1 은 코드에 나오지 않습니다.
     var CODE_LEN = 4;
     var LETTERS  = 'ABCDEFGHJKMNPQRSTUVWXYZ23456789';
 
-    // 매칭은 백엔드에 API 가 아직 없습니다. 없는 값을 지어내 보여주면
-    // 되는 것처럼 보이다가 나중에 조용히 어긋나므로, 잠그고 이유를 밝힙니다.
-    var WAITING_API = '백엔드에 매칭 API 가 생기면 열립니다';
 
     // ── 지금 어디까지 왔는지 ────────────────────────────
     var s = {
@@ -105,12 +104,13 @@
       foe: null,       // 상대 닉네임
       role: null,      // 'host'(방을 만든 쪽) | 'guest'(코드로 들어간 쪽)
       phase: null,     // 'making' | 'hosting' | 'hunting'
-      roomError: null  // 방 만들기·입장이 실패한 이유
+      queue: null,     // 랜덤 매칭에서 줄 선 자리
+      roomError: null  // 방 만들기·입장·매칭이 실패한 이유
     };
 
     function blank() {
-      return { nick: null, playerId: null, mode: null, room: null,
-               foe: null, role: null, phase: null, roomError: null };
+      return { nick: null, playerId: null, mode: null, room: null, foe: null,
+               role: null, phase: null, queue: null, roomError: null };
     }
 
     var timers = [];
@@ -298,6 +298,98 @@
       };
     }
 
+    // ── 랜덤 매칭 (웹소켓) ──────────────────────────────
+    // 코드를 주고받지 않고 아무나 기다리는 사람과 짝지어 줍니다.
+    //   ws://…/ws/match?nickname=수진
+    //
+    // 짝이 지어진 뒤는 코드로 만난 것과 완전히 같습니다. 그래서 채팅도
+    // 이 통로를 그대로 씁니다 — roomSock 을 같이 쓰는 이유입니다.
+    //
+    // 눈여겨볼 점: 상대가 나가도 연결이 끊기지 않습니다. 서버가 알아서
+    // 다시 줄을 세워주고, 마침 기다리는 사람이 있으면 바로 새 짝을 붙여
+    // 줍니다. 우리가 다시 접속하면 기다린 시간이 없던 일이 되고 줄 맨
+    // 뒤로 밀리므로, partner_left 를 받아도 연결을 건드리지 않습니다.
+    function startMatch() {
+      dropRoomSocket();
+      s.phase = 'hunting';
+      s.roomError = null;
+      s.foe = null;
+      render();
+
+      var sock;
+      try {
+        sock = new WebSocket(WS_BASE + '/ws/match?nickname=' + encodeURIComponent(s.nick));
+      } catch (e) {
+        stopMatch('연결하지 못했어요 — ' + e.message);
+        return;
+      }
+      roomSock = sock;
+
+      sock.onmessage = function (ev) {
+        var msg;
+        try { msg = JSON.parse(ev.data); } catch (e) { return; }
+
+        if (handleChat(msg)) return;
+
+        // 줄을 섰습니다. 기다리는 사람이 없다는 뜻입니다.
+        if (msg.type === 'waiting') {
+          s.foe = null;
+          s.phase = 'hunting';
+          s.queue = msg.position;
+          render();
+          return;
+        }
+
+        // ★ 기다리던 쪽에는 요청하지도 않았는데 오는 소식입니다.
+        if (msg.type === 'matched') {
+          s.room = msg.code;
+          s.foe = msg.partner_nickname;
+          // 먼저 기다린 쪽이 방장이 되지만, 채팅에서 하는 일은 같습니다.
+          // 그래서 화면에서 굳이 구분하지 않습니다.
+          s.role = 'guest';
+          s.phase = null;
+          render();
+          return;
+        }
+
+        // 상대가 나갔습니다. 연결은 그대로 살아 있고, 바로 뒤에
+        // waiting 이나 matched 가 이어서 옵니다.
+        if (msg.type === 'partner_left') {
+          var gone = msg.nickname;
+          s.foe = null;
+          s.room = null;
+          s.phase = 'hunting';
+          render();
+          // 새 짝과는 방이 새로 만들어지고 이전 대화는 이어지지 않습니다.
+          // 화면에 남겨두면 새 상대가 한 말처럼 보이므로 비웁니다.
+          if (chat) {
+            chat.clear();
+            chat.system(gone + ' 님이 나갔습니다. 새 상대를 찾는 중…');
+          }
+          return;
+        }
+
+        if (msg.type === 'error') {
+          if (s.foe) { if (chat) chat.system(msg.message); return; }
+          stopMatch(msg.message);
+        }
+      };
+
+      sock.onclose = function () {
+        if (roomSock !== sock) return;
+        roomSock = null;
+        stopMatch('연결이 끊겼어요. 백엔드가 켜져 있는지 확인해 주세요');
+      };
+    }
+
+    // 매칭을 그만둡니다. 연결을 끊으면 줄에서도 빠집니다.
+    function stopMatch(why) {
+      dropRoomSocket();
+      s.room = null; s.foe = null; s.phase = null; s.queue = null;
+      s.roomError = why || null;
+      render();
+    }
+
     // 방에서 빠져나올 때 화면을 되돌립니다.
     function leaveRoom(why) {
       dropRoomSocket();
@@ -333,7 +425,12 @@
         chat = Chat.mount('#chatBox', {
           me: s.nick,
           title: '대기실 채팅',
-          height: '260px',
+          height: '300px',
+          // 화면 오른쪽 아래 동그란 버튼으로 띄웁니다. 대기실에서 할 일은
+          // 방을 잡는 것이라, 채팅이 자리를 크게 차지하면 안 됩니다.
+          float: true,
+          // 처음엔 닫아둡니다. 말이 오면 버튼에 숫자가 붙습니다.
+          open: false,
           // 서버가 받아주는 한도와 맞춥니다. 화면에서만 더 짧게 막으면
           // 보낼 수 있는 말을 못 보내게 됩니다.
           maxLen: 500,
@@ -355,6 +452,10 @@
         chat.system(s.role === 'guest'
           ? s.foe + ' 님의 방에 들어왔습니다'
           : s.foe + ' 님이 들어왔습니다');
+        // 상대가 정해지는 순간 창을 펼칩니다. 여기까지 왔다는 건 이제
+        // 할 일이 이야기하는 것뿐이라는 뜻인데, 버튼만 떠 있으면
+        // 채팅이 열린 줄 모르고 지나칩니다.
+        chat.open();
       } else if (!s.foe && chatFoe) {
         chat.system(chatFoe + ' 님과의 연결이 끝났습니다');
         chat.setStatus('offline');
@@ -607,8 +708,8 @@
           // 안 그러면 랜덤 화면 밑에 아까 치던 방코드가 남습니다.
           // 만들어 둔 방이 있었다면 연결을 끊어 서버에서도 치웁니다.
           dropRoomSocket();
-          s.mode = input.value; s.room = null; s.foe = null;
-          s.phase = null; s.roomError = null;
+          s.mode = input.value; s.room = null; s.foe = null; s.role = null;
+          s.phase = null; s.queue = null; s.roomError = null;
           render();
         });
       });
@@ -804,8 +905,9 @@
       refresh();
     }
 
-    // ④ 랜덤 매칭 — '찾는 중' 화면도 매칭 API 가 생겨야 닿습니다.
+    // ④ 랜덤 매칭
     function renderRandom(box) {
+      // 짝이 지어졌습니다. 코드로 만난 것과 같은 모습입니다.
       if (s.foe) {
         box.innerHTML = '<div class="split">' + versus(s.foe, 'found') + '</div>';
         return;
@@ -817,23 +919,26 @@
             versus(null, 'hunting') +
             '<p class="elapsed" id="clock">00:00</p>' +
             '<button class="btn-wide is-quiet" id="stopMatch" type="button">취소</button>' +
+            (s.queue
+              ? '<p class="queue"><i class="queue-dot"></i>줄 <b>' + s.queue + '</b>번째로 기다리는 중</p>'
+              : '') +
           '</div>';
 
+        // 얼마나 기다렸는지 보여줍니다. 아무 변화가 없으면 멈춘 것처럼
+        // 보이기 때문입니다. 이건 화면 안에서만 도는 시계입니다.
         var n = 0, clockEl = $('clock');
         var tileEl = document.querySelector('.player.is-hunting .player-tile');
         var tick = setInterval(function () {
           n++;
           if (clockEl) clockEl.textContent = mmss(n);
-          if (tileEl) tileEl.textContent = LETTERS[Math.floor(Math.random() * 24)];
+          if (tileEl) tileEl.textContent = LETTERS[Math.floor(Math.random() * LETTERS.length)];
         }, 1000);
         timers.push(tick);   // 상태가 바뀌면 같이 멈춥니다.
 
         $('stopMatch').addEventListener('click', function () {
           clearAll(); clearInterval(tick);
-          s.phase = null;
-          render();
-          var h = document.querySelector('#branch .hint');
-          if (h) h.textContent = '매칭을 멈췄어요';
+          // 연결을 끊으면 줄에서도 빠집니다.
+          stopMatch('매칭을 멈췄어요');
         });
         return;
       }
@@ -841,9 +946,13 @@
       box.innerHTML =
         '<div class="split">' +
           versus(null, 'empty') +
-          '<button class="btn-wide" id="startMatch" type="button" disabled>매칭 시작</button>' +
-          '<p class="hint is-mid">' + WAITING_API + '</p>' +
+          '<button class="btn-wide" id="startMatch" type="button">매칭 시작</button>' +
+          (s.roomError
+            ? '<p class="hint is-bad"><span class="hint-icon">!</span>' + esc(s.roomError) + '</p>'
+            : '<p class="hint is-mid">기다리는 사람과 바로 짝지어 드려요</p>') +
         '</div>';
+
+      $('startMatch').addEventListener('click', startMatch);
     }
 
     // 두 사람 자리 — 친구·랜덤이 같은 모양을 씁니다.

@@ -166,11 +166,6 @@ body{margin:0;padding:0;background:var(--paper);color:var(--ink);font-family:var
 .queue-dot{width:8px;height:8px;flex:none;background:var(--ok);border:1px solid var(--rule)}
 .queue.is-lonely .queue-dot{background:transparent;border-color:var(--grid)}
 
-/* ── 채팅이 붙는 자리 ──────────────────────────────────────
-   채팅의 겉모습은 chat/chat.css 가 챙깁니다.
-   여기서는 대기실 카드와 너비만 맞춰줍니다. */
-.lobby-chat{max-width:520px;margin:20px auto 0}
-
 /* ── 안내 한 줄 ────────────────────────────────────────── */
 .hint{display:flex;align-items:center;gap:7px;margin:11px 0 0;min-height:22px;font-size:13px;color:var(--ink-soft)}
 .hint.is-ok{color:var(--ok)}
