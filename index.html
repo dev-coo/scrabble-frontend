@@ -15,9 +15,10 @@
   대기실 페이지 — design/pages/lobby.html 에서 그린 화면을 실제 앱으로 옮긴 것입니다.
     ① 닉네임 (로그인 / 새로 만들기)  ← 진짜 백엔드를 부릅니다
     ─ 모드 선택                      ← 화면 안에서만 고르는 것이라 서버가 필요 없습니다
-    ② 방코드 입력 + 입장             ← 잠김: 방 API 없음
-    ③ 방 생성 + 코드 공유            ← 잠김: 방 API 없음
+    ② 방코드 입력 + 입장             ← 웹소켓으로 진짜 들어갑니다
+    ③ 방 생성 + 코드 공유            ← 웹소켓으로 진짜 만듭니다
     ④ 랜덤 매칭                      ← 잠김: 매칭 API 없음
+    ─ 채팅                           ← 웹소켓으로 진짜 주고받습니다
 
   가짜 값(목 데이터)은 넣지 않습니다. 없는 값을 지어내 보여주면 되는 것처럼
   보이다가, 진짜 API 가 붙는 순간 조용히 어긋납니다. 그래서 아직 못 하는 일은
@@ -77,13 +78,23 @@
     // 백엔드 주소가 바뀌면 이 한 줄만 고치면 됩니다.
     var API_BASE = "http://100.115.173.118:11000";
 
-    var NICK_MAX = 12;
-    var CODE_LEN = 4;
-    var LETTERS  = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';   // O·0·I·1 은 뺍니다
+    // 웹소켓은 http 대신 ws 로 시작합니다. 주소는 같은 곳이라 바꿔 씁니다.
+    // (https 였다면 wss 가 됩니다)
+    var WS_BASE = API_BASE.replace(/^http/, 'ws');
 
-    // 방·매칭은 백엔드에 API 가 아직 없습니다. 없는 값을 지어내 보여주면
+    var NICK_MAX = 12;
+    // 코드 입력칸 수.
+    // ⚠️ 2026-08-08 기준 백엔드는 아직 6자리를 발급합니다(예: 8XS79U).
+    //    백엔드가 4자리로 바뀔 예정이라 미리 4로 맞춰둔 값입니다.
+    //    그때까지는 코드로 입장하는 길이 막혀 있습니다 —
+    //    6자리 코드를 4칸에 넣을 수 없기 때문입니다.
+    // 헷갈리기 쉬운 O·I·L·0·1 은 코드에 나오지 않습니다.
+    var CODE_LEN = 4;
+    var LETTERS  = 'ABCDEFGHJKMNPQRSTUVWXYZ23456789';
+
+    // 매칭은 백엔드에 API 가 아직 없습니다. 없는 값을 지어내 보여주면
     // 되는 것처럼 보이다가 나중에 조용히 어긋나므로, 잠그고 이유를 밝힙니다.
-    var WAITING_API = '백엔드에 방·매칭 API 가 생기면 열립니다';
+    var WAITING_API = '백엔드에 매칭 API 가 생기면 열립니다';
 
     // ── 지금 어디까지 왔는지 ────────────────────────────
     var s = {
@@ -92,13 +103,14 @@
       mode: null,      // 'friend' | 'random'
       room: null,      // 호스트가 받은 코드
       foe: null,       // 상대 닉네임
+      role: null,      // 'host'(방을 만든 쪽) | 'guest'(코드로 들어간 쪽)
       phase: null,     // 'making' | 'hosting' | 'hunting'
-      leaving: false   // 게임 화면으로 넘어가는 중인지
+      roomError: null  // 방 만들기·입장이 실패한 이유
     };
 
     function blank() {
       return { nick: null, playerId: null, mode: null, room: null,
-               foe: null, phase: null, leaving: false };
+               foe: null, role: null, phase: null, roomError: null };
     }
 
     var timers = [];
@@ -110,6 +122,189 @@
     }
 
     var $ = function (id) { return document.getElementById(id); };
+
+    // ── 방 만들기 (웹소켓) ──────────────────────────────
+    // HTTP 는 "물어보면 답한다"라서 한 번 주고받으면 끝입니다. 방을 만들고
+    // 친구를 기다리는 일은 그걸로 안 됩니다 — 친구가 언제 올지 모르니까요.
+    // 웹소켓은 선을 이어둔 채로 두는 방식이라, 백엔드가 먼저 말을 걸 수 있습니다.
+    //
+    // 이 통로의 규칙은 백엔드가 공개한 명세(/ws-docs)에 적혀 있습니다:
+    //   · ws://…/ws/rooms?nickname=수진 로 접속하는 그 순간 방이 만들어집니다
+    //   · 방 코드가 담긴 { type:"room_created", code, … } 가 바로 날아옵니다
+    //   · 그 뒤로 연결을 끊지 않고 두는 것이 곧 "친구를 기다리는 상태"입니다
+    //   · 끊으면 방도 같이 사라집니다
+    var roomSock = null;
+
+    // 우리 쪽에서 정리할 때 씁니다. onclose 를 먼저 떼는 이유는,
+    // 우리가 일부러 끊는 것을 "사고로 끊겼다"고 알리지 않기 위해서입니다.
+    function dropRoomSocket() {
+      if (!roomSock) return;
+      roomSock.onclose = null;
+      roomSock.onerror = null;
+      roomSock.onmessage = null;
+      try { roomSock.close(); } catch (e) {}
+      roomSock = null;
+    }
+
+    function failRoom(why) {
+      dropRoomSocket();
+      s.room = null;
+      s.phase = null;
+      s.roomError = why;
+      render();
+    }
+
+    function makeRoom() {
+      dropRoomSocket();
+      s.phase = 'making';
+      s.roomError = null;
+      render();
+
+      var sock;
+      try {
+        sock = new WebSocket(WS_BASE + '/ws/rooms?nickname=' + encodeURIComponent(s.nick));
+      } catch (e) {
+        failRoom('연결하지 못했어요 — ' + e.message);
+        return;
+      }
+      roomSock = sock;
+
+      sock.onmessage = function (ev) {
+        var msg;
+        try { msg = JSON.parse(ev.data); } catch (e) { return; }
+
+        if (handleChat(msg)) return;
+
+        if (msg.type === 'room_created') {
+          // 백엔드가 준 모양: { type, code, name, host_nickname, max_players }
+          s.room = msg.code;
+          s.role = 'host';
+          s.phase = 'hosting';
+          s.roomError = null;
+          render();
+          return;
+        }
+
+        // ★ 우리가 물어보지 않았는데 오는 메시지입니다.
+        //   이 기능을 웹소켓으로 만든 이유가 바로 이것입니다. HTTP 였다면
+        //   "혹시 친구 들어왔나요?"를 계속 되물어야 했습니다.
+        if (msg.type === 'guest_joined') {
+          s.foe = msg.nickname;
+          render();
+          return;
+        }
+
+        // 친구가 나가면 자리가 다시 빕니다. 방은 그대로 살아 있어서
+        // 같은 코드로 다른 사람이 들어올 수 있습니다.
+        if (msg.type === 'guest_left') {
+          s.foe = null;
+          s.phase = 'hosting';
+          render();
+          return;
+        }
+
+        if (msg.type === 'error') {
+          // 기다리는 중이거나 이야기 중에 오는 안내는 방이 없어졌다는 뜻이
+          // 아닙니다. (예: "아직 상대가 들어오지 않았습니다", 채팅 형식 위반)
+          // 이때는 연결이 끊기지 않으므로 채팅 칸에 알리고 그대로 둡니다.
+          if (s.phase === 'hosting' || s.foe) {
+            if (chat) chat.system(msg.message);
+            return;
+          }
+          failRoom(msg.message);
+        }
+      };
+
+      sock.onclose = function () {
+        // 우리가 끊은 것이면 위에서 onclose 를 떼놨으니 여기 안 옵니다.
+        if (roomSock !== sock) return;
+        roomSock = null;
+        failRoom(s.phase === 'hosting' || s.foe
+          ? '연결이 끊겨 방이 사라졌어요. 다시 만들어 주세요'
+          : '방을 만들지 못했어요. 백엔드가 켜져 있는지 확인해 주세요');
+      };
+    }
+
+    // ── 코드로 방에 들어가기 (웹소켓) ───────────────────
+    // 방을 만드는 것과 같은 통로인데, 주소에 코드가 하나 더 붙습니다.
+    //   ws://…/ws/rooms/DQDZ3Z?nickname=엘리
+    // 들어가지면 방장에게도 알림이 갑니다. 소문자로 쳐도 서버가 맞춰줍니다.
+    function joinRoom(code, onFail) {
+      dropRoomSocket();
+      s.roomError = null;
+
+      var sock;
+      try {
+        sock = new WebSocket(WS_BASE + '/ws/rooms/' + encodeURIComponent(code) +
+                             '?nickname=' + encodeURIComponent(s.nick));
+      } catch (e) {
+        onFail('연결하지 못했어요 — ' + e.message);
+        return;
+      }
+      roomSock = sock;
+
+      // 'knocking' 두드리는 중 → 'in' 들어가 있음 → 'done' 이유를 이미 알림
+      var stage = 'knocking';
+
+      sock.onmessage = function (ev) {
+        var msg;
+        try { msg = JSON.parse(ev.data); } catch (e) { return; }
+
+        if (handleChat(msg)) return;
+
+        if (msg.type === 'joined') {
+          // 백엔드가 준 모양: { type, code, host_nickname, guest_nickname }
+          stage = 'in';
+          s.room = msg.code;
+          s.foe = msg.host_nickname;
+          s.role = 'guest';
+          s.phase = null;
+          s.roomError = null;
+          render();
+          return;
+        }
+
+        // 방장이 나가면 1:1 대화가 성립하지 않으므로 서버가 곧 연결도 닫습니다.
+        // 그 코드는 죽었습니다 — 다시 들어가려면 새 코드를 받아야 합니다.
+        if (msg.type === 'host_left') {
+          stage = 'done';
+          leaveRoom(msg.message || '방장이 나갔습니다');
+          return;
+        }
+
+        if (msg.type === 'error') {
+          // 이미 들어가 있다면 채팅 쪽 문제입니다(형식 위반 등).
+          // 그럴 땐 연결이 끊기지 않으니 방에서 내보내면 안 됩니다.
+          if (stage === 'in') {
+            if (chat) chat.system(msg.message);
+            return;
+          }
+          // 들어가지 못한 경우 — 명세상 서버가 곧 끊지만(1008), 기다리지 않고
+          // 우리도 정리합니다. 저쪽이 끊어주겠거니 믿으면, 안 끊는 날 연결이 남습니다.
+          stage = 'done';
+          dropRoomSocket();
+          if (onFail) onFail(msg.message);
+        }
+      };
+
+      sock.onclose = function () {
+        if (roomSock !== sock) return;
+        roomSock = null;
+        if (stage === 'knocking') {
+          if (onFail) onFail('연결이 끊겼어요. 백엔드가 켜져 있는지 확인해 주세요');
+        } else if (stage === 'in') {
+          leaveRoom('연결이 끊겨 방에서 나왔어요');
+        }
+      };
+    }
+
+    // 방에서 빠져나올 때 화면을 되돌립니다.
+    function leaveRoom(why) {
+      dropRoomSocket();
+      s.room = null; s.foe = null; s.role = null; s.phase = null;
+      s.roomError = why;
+      render();
+    }
 
     // ── 그리기 ──────────────────────────────────────────
     function render() {
@@ -139,23 +334,53 @@
           me: s.nick,
           title: '대기실 채팅',
           height: '260px',
-          // 아직 서버에 붙지 않았으므로 '연결 끊김'으로 둡니다.
-          // 그래야 입력칸이 잠겨서, 보내지지도 않을 글을 치지 않게 됩니다.
+          // 서버가 받아주는 한도와 맞춥니다. 화면에서만 더 짧게 막으면
+          // 보낼 수 있는 말을 못 보내게 됩니다.
+          maxLen: 500,
+          // 혼자 있을 때는 잠가둡니다. 상대가 없으면 서버가 받아주지 않아서,
+          // 열어두면 보내지지도 않을 글을 치게 됩니다.
           status: 'offline',
-          onSend: function (text) {
-            // ★ 여기가 백엔드로 나가는 문입니다.
-            //   웹소켓 명세서가 오면 이 안에서 socket.send(...) 를 합니다.
-          }
+          // 내가 보낸 말은 서버가 되돌려 주지 않습니다(명세). 그래서 내 말은
+          // 채팅 모듈이 바로 그립니다. 되돌려 받아 또 그리면 두 번 나옵니다.
+          echo: true,
+          onSend: sendChat
         });
-        chat.system('아직 서버에 연결되지 않았습니다');
+        chat.system('방에 들어가면 이야기할 수 있어요');
       }
 
-      // 상대가 들어오면 한 번만 알립니다.
+      // 둘이 모였는지에 따라 채팅을 열고 닫습니다.
       if (s.foe && s.foe !== chatFoe) {
         chatFoe = s.foe;
-        chat.system(s.foe + ' 님이 들어왔습니다');
+        chat.setStatus('online');
+        chat.system(s.role === 'guest'
+          ? s.foe + ' 님의 방에 들어왔습니다'
+          : s.foe + ' 님이 들어왔습니다');
+      } else if (!s.foe && chatFoe) {
+        chat.system(chatFoe + ' 님과의 연결이 끝났습니다');
+        chat.setStatus('offline');
+        chatFoe = null;
       }
-      if (!s.foe) chatFoe = null;
+    }
+
+    // 채팅 보내기 — 방 통로를 그대로 씁니다.
+    // 방장이든 들어간 쪽이든 보내는 형식은 똑같습니다.
+    function sendChat(text) {
+      if (!roomSock || roomSock.readyState !== 1) {
+        if (chat) chat.system('연결이 없어 보내지 못했어요');
+        return;
+      }
+      // 명세: 그냥 문자열이 아니라 JSON 으로 보냅니다.
+      roomSock.send(JSON.stringify({ type: 'message', text: text }));
+    }
+
+    // 방 통로로 들어온 메시지 중 채팅에 해당하는 것을 처리합니다.
+    // 방 만들기·입장 두 통로가 똑같이 씁니다.
+    function handleChat(msg) {
+      if (msg.type !== 'message') return false;
+      // 여기 오는 건 전부 상대의 말입니다. 시각도 서버가 찍은 것을 씁니다
+      // (각자 컴퓨터 시계를 쓰면 두 사람 화면에서 순서가 달라질 수 있습니다).
+      if (chat) chat.receive({ from: msg.from, text: msg.text, at: msg.at });
+      return true;
     }
 
     function renderStepper() {
@@ -179,6 +404,7 @@
           '<button class="btn-link" id="renick" type="button">바꾸기</button></p>';
         $('renick').addEventListener('click', function () {
           clearAll();
+          dropRoomSocket();   // 다른 사람이 되는 것이므로 만들어 둔 방도 접습니다
           s = blank();
           render();
         });
@@ -379,7 +605,10 @@
           clearAll();
           // 모드를 바꾸면 그 아래에서 하던 건 지웁니다.
           // 안 그러면 랜덤 화면 밑에 아까 치던 방코드가 남습니다.
-          s.mode = input.value; s.room = null; s.foe = null; s.phase = null;
+          // 만들어 둔 방이 있었다면 연결을 끊어 서버에서도 치웁니다.
+          dropRoomSocket();
+          s.mode = input.value; s.room = null; s.foe = null;
+          s.phase = null; s.roomError = null;
           render();
         });
       });
@@ -417,9 +646,13 @@
     // 않습니다. 거기까지 데려다 줄 방 API 가 아직 없기 때문입니다.
     function renderFriend(box) {
 
-      // 상대가 들어왔으면 자리표만 남깁니다.
+      // 둘이 다 모였습니다. 방장이든 들어간 쪽이든 같은 모습입니다.
       if (s.foe) {
-        box.innerHTML = '<div class="split">' + versus(s.foe, 'found') + '</div>';
+        box.innerHTML =
+          '<div class="split">' +
+            versus(s.foe, 'found') +
+            '<p class="hint is-mid">방 코드 ' + esc(s.room || '') + '</p>' +
+          '</div>';
         return;
       }
 
@@ -450,7 +683,9 @@
 
         $('dropRoom').addEventListener('click', function () {
           clearAll();
-          s.room = null; s.phase = null;
+          // 연결을 끊으면 서버에서도 그 방이 없어집니다. 따로 알릴 것이 없습니다.
+          dropRoomSocket();
+          s.room = null; s.phase = null; s.roomError = null;
           render();
         });
         return;
@@ -478,11 +713,14 @@
           '</div>' +
           '<p class="hint" id="codeHint"></p>' +
           '<p class="or">또는</p>' +
-          '<button class="btn-wide" id="make" type="button" disabled>방 만들기</button>' +
-          '<p class="hint is-mid">' + WAITING_API + '</p>' +
+          '<button class="btn-wide" id="make" type="button">방 만들기</button>' +
+          (s.roomError
+            ? '<p class="hint is-bad"><span class="hint-icon">!</span>' + esc(s.roomError) + '</p>'
+            : '<p class="hint is-mid">방을 만들면 네 글자 코드가 나와요</p>') +
         '</div>';
 
       wireCode();
+      $('make').addEventListener('click', makeRoom);
     }
 
     function cells() {
@@ -499,18 +737,15 @@
       var cs    = [].slice.call(row.querySelectorAll('.code-cell'));
       var enter = $('enter');
       var hint  = $('codeHint');
-      var OK    = /[A-HJ-NP-Z2-9]/;
+      // 코드에 안 나오는 글자(O·I·L·0·1)는 아예 못 치게 막습니다.
+      var OK    = /[A-HJKMNP-Z2-9]/;
 
       function code() { return cs.map(function (c) { return c.value; }).join(''); }
 
-      // 코드를 다 채워도 입장은 아직 잠겨 있습니다.
-      // "그런 방이 있는지" 물어볼 백엔드 API 가 아직 없기 때문입니다.
-      // 치고·지우고·붙여넣는 일은 프론트 몫이라 그대로 둡니다.
       function refresh() {
-        enter.disabled = true;
+        enter.disabled = code().length < CODE_LEN;
         row.className = 'code-row';
-        hint.className = 'hint';
-        hint.textContent = code().length < CODE_LEN ? '' : WAITING_API;
+        hint.className = 'hint'; hint.textContent = '';
       }
 
       cs.forEach(function (cell, i) {
@@ -531,6 +766,38 @@
           cs.forEach(function (c, k) { c.value = t[k] || ''; });
           cs[Math.min(t.length, CODE_LEN - 1)].focus();
           refresh();
+        });
+      });
+
+      enter.addEventListener('click', function () {
+        var typed = code();
+
+        enter.disabled = true; enter.textContent = '확인 중…';
+        cs.forEach(function (c) { c.disabled = true; });
+        hint.className = 'hint is-wait';
+        hint.innerHTML = '';
+        hint.appendChild(el('span', 'waiting'));
+        hint.appendChild(document.createTextNode(' 그런 방이 있는지 알아보는 중이에요'));
+
+        joinRoom(typed, function (why) {
+          // 들어가지 못했습니다 — 흔들고, 비우고, 첫 칸으로 돌려보냅니다.
+          // 서버는 "없는 코드"와 "방장이 이미 나간 코드"를 구분해 주지
+          // 않습니다. 어느 쪽이든 할 일은 같고(코드를 다시 받기),
+          // 구분해 주면 아무 코드나 넣어보며 알아내는 데 쓰일 수 있어서입니다.
+          cs.forEach(function (c) { c.disabled = false; });
+          enter.textContent = '입장';
+          row.className = 'code-row is-bad is-shake';
+          hint.className = 'hint is-bad';
+          hint.innerHTML = '';
+          hint.appendChild(el('span', 'hint-icon', '!'));
+          hint.appendChild(document.createTextNode(' ' + why));
+
+          later(function () {
+            cs.forEach(function (c) { c.value = ''; });
+            row.className = 'code-row';
+            enter.disabled = true;
+            cs[0].focus();
+          }, 900);
         });
       });
 
@@ -602,37 +869,22 @@
       step.className = 'step' + (ready ? '' : ' is-locked');
 
       if (!ready) {
-        s.leaving = false;
         body.innerHTML =
           '<div class="leaving is-idle">' +
-            '<p class="hint is-mid">상대가 정해지면 자동으로 시작됩니다</p>' +
+            '<p class="hint is-mid">상대가 정해지면 여기가 열립니다</p>' +
           '</div>';
         return;
       }
 
+      // 원래 디자인은 여기서 게임 화면으로 저절로 넘어갔습니다.
+      // 그 화면을 아직 안 만들었으므로 넘어가는 척하지 않습니다.
       body.innerHTML =
         '<div class="leaving">' +
           '<p class="hint is-ok is-mid"><span class="hint-icon">✓</span> ' +
             esc(s.foe) + ' 님과 준비됐어요' +
           '</p>' +
+          '<p class="hint is-mid">게임 화면은 아직 만들지 않았습니다</p>' +
         '</div>';
-
-      // 통과 표시를 잠깐 보여준 뒤 스스로 넘어갑니다.
-      // 곧바로 넘기면 사용자는 방금 뭐가 일어났는지 모른 채 화면이 튄 것처럼 느낍니다.
-      if (s.leaving) return;
-      s.leaving = true;
-
-      later(function () {
-        var box = $('step3Body');
-        if (!box || !s.foe) return;
-        box.innerHTML = '';
-        var wrap = el('div', 'leaving');
-        var line = el('p', 'hint is-wait is-mid');
-        line.appendChild(el('span', 'waiting'));
-        line.appendChild(document.createTextNode(' 게임 화면으로 넘어갑니다…'));
-        wrap.appendChild(line);
-        box.appendChild(wrap);
-      }, 1400);
     }
 
     // ── 잡일 ───────────────────────────────────────────
