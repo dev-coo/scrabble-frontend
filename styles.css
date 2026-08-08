@@ -1,50 +1,182 @@
 /* ─────────────────────────────────────────────────────────────
-   스크래블 프론트엔드 — 화면 스타일(CSS)
+   스크래블 프론트엔드 — 대기실 화면 스타일(CSS)
 
    HTML = 화면의 "뼈대", CSS = 화면의 "겉모습", JS = 화면의 "동작".
    디자인만 고칠 때는 이 파일만 열면 되고, index.html 의 백엔드
    호출 코드는 건드리지 않아도 됩니다.
+
+   색·글꼴 같은 공통값(토큰)은 design/styles.css 한 곳에만 적어두고
+   여기서 불러 씁니다. 색을 바꾸려면 그 파일만 고치면 디자인 원본과
+   실제 화면이 같이 바뀝니다.
    ───────────────────────────────────────────────────────────── */
+@import url("design/styles.css");
 
-/* ── 기본 레이아웃 ─────────────────────────────────────────── */
-body { font-family: -apple-system, "Apple SD Gothic Neo", sans-serif; min-height: 100vh; margin: 0;
-       display: flex; align-items: center; justify-content: center; background: #f3f4f6; }
-.card { text-align: center; padding: 40px 52px; background: #fff; border-radius: 16px;
-        box-shadow: 0 6px 24px rgba(0,0,0,.08); max-width: 480px; }
-h1 { font-size: 1.7rem; margin: 0 0 6px; color: #4f46e5; }
-.sub { color: #6b7280; margin: 0 0 22px; }
-.label { font-size: .8rem; color: #9ca3af; letter-spacing: .04em; }
-hr { border: 0; border-top: 1px solid #e5e7eb; margin: 26px 0 20px; }
+*{box-sizing:border-box}
+body{margin:0;padding:0;background:var(--paper);color:var(--ink);font-family:var(--font-text);line-height:1.6;-webkit-font-smoothing:antialiased}
+.board{min-height:100vh;padding:40px 20px 72px}
 
-/* ── 백엔드 응답 박스 / 성공·실패 글씨 ───────────────────────── */
-#result { margin-top: 8px; padding: 16px; border-radius: 10px; background: #f9fafb;
-          border: 1px solid #e5e7eb; font-size: 1.05rem; }
-.ok { color: #059669; font-weight: 700; }
-.err { color: #dc2626; font-weight: 700; }
+/* ── 대기실 본체 — 좁은 한 줄로 세웁니다. ─────────────────
+   가로로 벌리면 눈이 좌우로 왔다갔다 하게 됩니다.
+   순서대로 밟는 화면은 위에서 아래로 한 줄이 제일 빠릅니다. */
+.lobby{max-width:520px;margin:0 auto;background:var(--paper-2);border:1.5px solid var(--rule)}
 
-/* ── 입력 폼 (닉네임 저장 / 조회 / 수정 공용) ────────────────── */
-.form-row { display: flex; gap: 8px; }
-.form-row input { flex: 1; padding: 11px 13px; font-size: 1rem; border: 1px solid #d1d5db;
-                  border-radius: 10px; font-family: inherit; }
-.form-row input:focus { outline: 2px solid #a5b4fc; outline-offset: 1px; border-color: #6366f1; }
-.form-row button { padding: 11px 20px; font-size: 1rem; font-family: inherit; font-weight: 600;
-                   color: #fff; background: #4f46e5; border: 0; border-radius: 10px; cursor: pointer; }
-.form-row button:hover:enabled { background: #4338ca; }
-.form-row button:disabled { background: #c7d2fe; cursor: default; }
-#saveResult, #findResult { margin-top: 12px; min-height: 1.3em; font-size: .95rem; text-align: left; }
+/* ── 머리 ──────────────────────────────────────────────── */
+.crown{padding:26px 26px 22px;border-bottom:1.5px solid var(--rule);text-align:center}
+.tiles{display:flex;justify-content:center;margin:0 0 14px}
+.tile{width:34px;height:38px;display:grid;place-items:center;background:var(--theme);border:1px solid var(--rule);margin-left:-1px;font-family:var(--font-display);font-weight:700;font-size:17px;color:var(--ink)}
+.tile:first-child{margin-left:0}
+.crown h1{margin:0;font-family:var(--font-mono);font-size:11px;font-weight:400;letter-spacing:var(--track-caps);text-transform:uppercase;color:var(--ink-soft)}
 
-/* ── 조회 결과 카드 (id / 닉네임 / 만든 날짜 + 수정·삭제) ────── */
-.found { padding: 12px 14px; border-radius: 10px; background: #f9fafb; border: 1px solid #e5e7eb; }
-.found dl { margin: 0; display: grid; grid-template-columns: auto 1fr; gap: 4px 12px; }
-.found dt { color: #9ca3af; font-size: .85rem; }
-.found dd { margin: 0; font-size: .95rem; }
-.found .edit-label { margin: 16px 0 6px; }
-.found .form-row input { background: #fff; }
-#editResult { margin-top: 10px; min-height: 1.3em; font-size: .95rem; }
+/* ── 진행 표시 ─────────────────────────────────────────── */
+.stepper{display:flex;border-bottom:1.5px solid var(--rule)}
+.pip{flex:1;margin-left:-1px;padding:9px 6px;display:flex;align-items:center;justify-content:center;gap:7px;
+  background:transparent;border-left:1px solid var(--grid);
+  font-family:var(--font-mono);font-size:10.5px;letter-spacing:var(--track-caps);text-transform:uppercase;color:var(--ink-faint)}
+.pip:first-child{border-left:none}
+.pip-no{width:17px;height:17px;flex:none;display:grid;place-items:center;border:1px solid var(--grid);font-size:9px}
+.pip.is-now{background:var(--theme-tint);color:var(--ink)}
+.pip.is-now .pip-no{background:var(--theme);border-color:var(--rule)}
+.pip.is-done{color:var(--ok)}
+.pip.is-done .pip-no{background:var(--ok);border-color:var(--rule);color:#fff}
 
-/* 삭제는 되돌릴 수 없는 동작이라, 실수로 누르지 않게 다른 색을 씁니다. */
-#deleteBtn { margin-top: 4px; padding: 9px 16px; font-size: .9rem; font-family: inherit;
-             font-weight: 600; color: #dc2626; background: #fff; border: 1px solid #fca5a5;
-             border-radius: 9px; cursor: pointer; }
-#deleteBtn:hover:enabled { color: #fff; background: #dc2626; border-color: #dc2626; }
-#deleteBtn:disabled { color: #fca5a5; border-color: #fee2e2; cursor: default; }
+/* ── 단계 ──────────────────────────────────────────────── */
+.step{padding:24px 26px;border-top:1px solid var(--grid)}
+.step:first-of-type{border-top:none}
+.step.is-locked{opacity:.4;pointer-events:none}
+.step-head{display:flex;align-items:center;gap:9px;margin:0 0 14px;
+  font-family:var(--font-mono);font-size:11px;letter-spacing:var(--track-caps);text-transform:uppercase;color:var(--ink)}
+.step-no{width:19px;height:19px;flex:none;display:grid;place-items:center;background:var(--theme);border:1px solid var(--rule);font-size:10px}
+.step.is-locked .step-no{background:transparent;border-color:var(--grid)}
+
+/* 끝난 단계는 한 줄로 접습니다. */
+.done-row{display:flex;align-items:center;gap:9px;font-size:14px}
+.done-row .tick{width:18px;height:18px;flex:none;display:grid;place-items:center;background:var(--ok);border:1px solid var(--rule);color:#fff;font-family:var(--font-display);font-size:11px;font-weight:700}
+.done-row b{font-weight:600}
+.btn-link{margin-left:auto;padding:4px 9px;font-family:var(--font-mono);font-size:10.5px;letter-spacing:var(--track-caps);text-transform:uppercase;
+  color:var(--ink-soft);background:transparent;border:1px solid var(--grid);border-radius:0;cursor:pointer}
+.btn-link:hover{color:var(--ink);border-color:var(--rule)}
+
+/* ── ① 닉네임 ──────────────────────────────────────────── */
+.field-row{display:flex;align-items:stretch}
+.field{flex:1;min-width:0;height:48px;margin-right:-1px;padding:0 14px;font:inherit;font-size:16px;color:var(--ink);
+  background:#fff;border:1.5px solid var(--rule);border-radius:0;outline:none;transition:background .15s,box-shadow .15s}
+.field::placeholder{color:var(--ink-faint)}
+.field:focus{box-shadow:inset 0 -3px 0 var(--theme)}
+.field.is-ok{background:var(--ok-tint)}
+.field.is-bad{background:var(--bad-tint)}
+.btn-check{flex:none;height:48px;padding:0 18px;
+  font-family:var(--font-display);font-size:12px;font-weight:700;letter-spacing:var(--track-caps);text-transform:uppercase;white-space:nowrap;
+  color:var(--ink);background:var(--theme);border:1.5px solid var(--rule);border-radius:0;cursor:pointer;transition:background .15s}
+.btn-check:hover:not(:disabled){background:var(--theme-deep)}
+.btn-check:disabled{cursor:not-allowed;background:transparent;color:var(--ink-faint);border-color:var(--grid)}
+.counter{margin-left:auto;font-family:var(--font-mono);font-size:11px;font-variant-numeric:tabular-nums;color:var(--ink-faint)}
+
+/* ── 모드 선택 ─────────────────────────────────────────── */
+.modes{display:flex;align-items:stretch}
+.mode{position:relative;flex:1;min-width:0;margin-left:-1px;padding:16px 12px;display:block;text-align:center;cursor:pointer;
+  background:#fff;border:1.5px solid var(--rule);transition:background .15s}
+.mode:first-child{margin-left:0}
+.mode:hover{background:var(--theme-tint)}
+.mode-input{position:absolute;width:1px;height:1px;opacity:0;pointer-events:none}
+.mode:has(.mode-input:checked){background:var(--theme)}
+.mode:has(.mode-input:focus-visible){box-shadow:inset 0 0 0 3px var(--theme-deep)}
+.mode-pics{display:flex;justify-content:center;margin:0 0 10px}
+.mode-pic{width:27px;height:32px;margin-left:-1px;display:grid;place-items:center;background:var(--paper-2);border:1px solid var(--rule);
+  font-family:var(--font-display);font-size:14px;font-weight:700}
+.mode-pic:first-child{margin-left:0}
+.mode-pic.is-any{background:transparent;border-style:dashed;border-color:var(--grid);color:var(--ink-faint)}
+.mode:has(.mode-input:checked) .mode-pic{background:#fff}
+.mode:has(.mode-input:checked) .mode-pic.is-any{background:transparent;border-color:var(--rule);color:var(--ink)}
+.mode-name{font-family:var(--font-display);font-size:13px;font-weight:700;letter-spacing:var(--track-caps);text-transform:uppercase}
+.mode-desc{margin-top:3px;font-size:12px;color:var(--ink-soft)}
+
+/* ── 친구 모드 안의 두 갈래 ────────────────────────────── */
+.split{margin-top:18px;padding-top:16px;border-top:1px solid var(--grid)}
+.split-label{margin:0 0 10px;font-family:var(--font-mono);font-size:10.5px;letter-spacing:var(--track-caps);text-transform:uppercase;color:var(--ink-soft)}
+.or{display:flex;align-items:center;gap:10px;margin:16px 0;
+  font-family:var(--font-mono);font-size:10px;letter-spacing:var(--track-caps);text-transform:uppercase;color:var(--ink-faint)}
+.or::before,.or::after{content:"";flex:1;height:1px;background:var(--grid)}
+
+.code-row{display:flex}
+.code-cell{width:44px;height:52px;margin-left:-1px;padding:0;
+  font-family:var(--font-display);font-size:22px;font-weight:700;text-align:center;text-transform:uppercase;
+  color:var(--ink);background:#fff;border:1.5px solid var(--rule);border-radius:0;outline:none;transition:background .15s,box-shadow .15s}
+.code-cell:first-child{margin-left:0}
+.code-cell:focus{box-shadow:inset 0 -4px 0 var(--theme)}
+.code-row.is-bad .code-cell{background:var(--bad-tint)}
+.code-row.is-shake{animation:shake .3s ease-in-out}
+@keyframes shake{25%{transform:translateX(-5px)}75%{transform:translateX(5px)}}
+
+.entry-row{display:flex;align-items:stretch}
+.btn-enter{flex:none;margin-left:-1px;height:52px;padding:0 18px;
+  font-family:var(--font-display);font-size:12px;font-weight:700;letter-spacing:var(--track-caps);text-transform:uppercase;
+  color:var(--ink);background:var(--theme);border:1.5px solid var(--rule);border-radius:0;cursor:pointer;transition:background .15s}
+.btn-enter:hover:not(:disabled){background:var(--theme-deep)}
+.btn-enter:disabled{cursor:not-allowed;background:transparent;color:var(--ink-faint);border-color:var(--grid)}
+
+.btn-wide{width:100%;height:52px;
+  font-family:var(--font-display);font-size:12px;font-weight:700;letter-spacing:var(--track-caps);text-transform:uppercase;
+  color:var(--ink);background:var(--theme);border:1.5px solid var(--rule);border-radius:0;cursor:pointer;transition:background .15s}
+.btn-wide:hover:not(:disabled){background:var(--theme-deep)}
+.btn-wide:disabled{cursor:not-allowed;background:transparent;color:var(--ink-faint);border-color:var(--grid)}
+.btn-wide.is-quiet{background:transparent}
+.btn-wide.is-quiet:hover:not(:disabled){background:var(--bad-tint);border-color:var(--bad);color:var(--bad)}
+
+/* 발급된 코드 (호스트) */
+.code-show{display:flex;justify-content:center;margin:0 0 12px}
+.show-cell{width:52px;height:64px;margin-left:-1px;display:grid;place-items:center;background:var(--theme);border:1.5px solid var(--rule);
+  font-family:var(--font-display);font-size:28px;font-weight:700}
+.show-cell:first-child{margin-left:0}
+.share-row{display:flex;align-items:stretch;margin-bottom:14px}
+.btn-copy{flex:1;height:42px;font-family:var(--font-display);font-size:11px;font-weight:700;letter-spacing:var(--track-caps);text-transform:uppercase;
+  color:var(--ink);background:transparent;border:1.5px solid var(--rule);border-radius:0;cursor:pointer;transition:background .15s}
+.btn-copy:hover{background:var(--theme-tint)}
+.btn-copy.is-done{background:var(--ok-tint);border-color:var(--ok);color:var(--ok)}
+.btn-cancel{flex:none;margin-left:-1px;height:42px;padding:0 14px;
+  font-family:var(--font-display);font-size:11px;font-weight:700;letter-spacing:var(--track-caps);text-transform:uppercase;
+  color:var(--ink-soft);background:transparent;border:1.5px solid var(--grid);border-radius:0;cursor:pointer}
+.btn-cancel:hover{color:var(--bad);border-color:var(--bad)}
+
+/* ── 두 사람 자리 — 친구·랜덤이 같이 씁니다. ───────────── */
+.versus{display:flex;align-items:stretch;margin-bottom:12px}
+.player{flex:1;min-width:0;margin-left:-1px;padding:13px 10px;background:#fff;border:1.5px solid var(--rule);text-align:center}
+.player:first-child{margin-left:0}
+.player.is-empty{background:transparent;border-style:dashed;border-color:var(--grid)}
+.player.is-found{background:var(--ok-tint)}
+.player-tile{width:38px;height:44px;margin:0 auto 8px;display:grid;place-items:center;background:var(--theme);border:1.5px solid var(--rule);
+  font-family:var(--font-display);font-size:19px;font-weight:700}
+.player.is-empty .player-tile{background:transparent;border-style:dashed;border-color:var(--grid);color:var(--ink-faint)}
+.player.is-found .player-tile{background:var(--ok);color:#fff;border-color:var(--rule)}
+.player.is-hunting .player-tile{animation:flip 1s steps(2,end) infinite}
+.player-name{font-size:13.5px;font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.player.is-empty .player-name{color:var(--ink-faint);font-weight:400}
+.player-role{margin-top:2px;font-family:var(--font-mono);font-size:9.5px;letter-spacing:var(--track-caps);text-transform:uppercase;color:var(--ink-faint)}
+.vs{flex:none;width:34px;margin-left:-1px;display:grid;place-items:center;background:var(--paper);border:1.5px solid var(--rule);
+  font-family:var(--font-display);font-size:11px;font-weight:700;color:var(--ink-soft)}
+
+.elapsed{margin:0 0 12px;text-align:center;font-family:var(--font-mono);font-size:22px;font-variant-numeric:tabular-nums;color:var(--ink)}
+.queue{display:flex;align-items:center;justify-content:center;gap:7px;margin:12px 0 0;font-size:12.5px;color:var(--ink-soft)}
+.queue b{color:var(--ink);font-variant-numeric:tabular-nums}
+.queue-dot{width:8px;height:8px;flex:none;background:var(--ok);border:1px solid var(--rule)}
+.queue.is-lonely .queue-dot{background:transparent;border-color:var(--grid)}
+
+/* ── 안내 한 줄 ────────────────────────────────────────── */
+.hint{display:flex;align-items:center;gap:7px;margin:11px 0 0;min-height:22px;font-size:13px;color:var(--ink-soft)}
+.hint.is-ok{color:var(--ok)}
+.hint.is-bad{color:var(--bad)}
+.hint.is-wait{color:var(--ink)}
+.hint.is-mid{justify-content:center;text-align:center}
+.hint-icon{flex:none;width:18px;height:18px;display:grid;place-items:center;
+  font-family:var(--font-display);font-size:11px;font-weight:700;color:#fff}
+.is-ok>.hint-icon{background:var(--ok)}
+.is-bad>.hint-icon{background:var(--bad)}
+.waiting{flex:none;width:14px;height:14px;background:var(--theme);border:1px solid var(--rule);animation:flip 1s steps(2,end) infinite}
+@keyframes flip{50%{background:transparent}}
+@media (prefers-reduced-motion:reduce){.waiting,.player.is-hunting .player-tile{animation-duration:3s}.code-row.is-shake{animation:none}}
+
+/* ── ③ 시작 ──────────────────────────────────────────────
+   누르는 버튼이 없습니다. 상대가 정해지면 스스로 넘어갑니다.
+   그래서 이 칸은 "지금 무슨 일이 일어나는지"만 알려줍니다. */
+.leaving{padding:18px 14px;text-align:center;background:var(--ok-tint);border:1.5px solid var(--rule)}
+.leaving.is-idle{background:transparent;border-style:dashed;border-color:var(--grid)}
+.leaving .hint{margin:0}
