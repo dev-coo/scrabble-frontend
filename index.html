@@ -1255,16 +1255,8 @@
       // 나중에 판에 놓아둔 글자도 같이 지워집니다.
       if (!gameBuilt) {
         $('gameView').innerHTML =
-          '<div class="stage-crown">' +
-            '<div class="tiles" aria-hidden="true">' +
-              'SCRABBLE'.split('').map(function (c) {
-                return '<div class="tile">' + c + '</div>';
-              }).join('') +
-            '</div>' +
-            '<h1>게임 · 방 ' + esc(s.room || '') + '</h1>' +
-          '</div>' +
+          '<div id="nameBar"></div>' +
           '<div class="stage-body">' +
-            '<div id="turnBox"></div>' +
             '<div id="boardBox"></div>' +
             '<p class="hint is-mid">아직 글자를 놓을 수 없습니다 — ' +
               '놓는 규칙이 백엔드와 정해지면 열립니다</p>' +
@@ -1283,22 +1275,47 @@
       }
 
       // 매번 바뀌는 것만 다시 씁니다.
-      renderTurn();
+      renderNameBar();
     }
 
-    // 누구 차례인지. 백엔드가 정해서 알려준 값을 그대로 씁니다.
-    function renderTurn() {
-      var box = $('turnBox');
+    // ── 상단 이름 바 ───────────────────────────────────
+    // 두 사람의 이름을 양끝에 두고 가운데를 비워둡니다.
+    //
+    // 이름은 둘 다 각자 정한 닉네임입니다. 내 것은 로그인할 때 백엔드가
+    // 돌려준 값(s.nick), 상대 것은 웹소켓이 알려준 값(s.foe)이라
+    // 프론트가 지어낸 글자가 하나도 없습니다.
+    //
+    // 누구 차례인지도 여기서 함께 보여줍니다. 이름과 차례를 따로 두면
+    // 같은 이야기를 두 군데서 하게 되고, 눈이 두 곳을 오갑니다.
+    function renderNameBar() {
+      var box = $('nameBar');
       if (!box) return;
-      if (!s.turn) { box.innerHTML = ''; return; }
 
-      var mine = s.turn === s.nick;
+      // 백엔드가 first_turn 을 알려주기 전에는 아무 쪽도 표시하지
+      // 않습니다. 둘 중 하나를 골라 두면 그건 지어낸 값입니다.
+      function side(name, role, cls) {
+        var turn = s.turn && s.turn === name;
+        return '<div class="nb-side ' + cls + (turn ? ' is-turn' : '') + '">' +
+                 '<span class="nb-tile">' + esc(name.charAt(0)) + '</span>' +
+                 '<span class="nb-who">' +
+                   '<b class="nb-name">' + esc(name) + '</b>' +
+                   '<i class="nb-role">' + role + (turn ? ' · 차례' : '') + '</i>' +
+                 '</span>' +
+               '</div>';
+      }
+
+      box.className = 'namebar';
       box.innerHTML =
-        '<div class="turn' + (mine ? ' is-me' : '') + '">' +
-          '<span class="turn-tile">' + esc(s.turn.charAt(0)) + '</span>' +
-          (mine ? '<span><b>내 차례</b>입니다</span>'
-                : '<span><b>' + esc(s.turn) + '</b> 님 차례입니다</span>') +
-        '</div>';
+        side(s.nick, '나', 'is-me') +
+        // 가운데 — 나중에 스코어와 남은 시간이 들어올 자리입니다.
+        // 둘 다 백엔드가 정해서 알려줘야 하는 값이라 지금은 비워두고,
+        // 방 코드만 놓습니다. 0 점이라고 적어두면 진짜 0 점인지
+        // 아직 모르는 것인지 구분이 안 됩니다.
+        '<div class="nb-mid">' +
+          '<span class="nb-vs">VS</span>' +
+          '<span class="nb-room">' + esc(s.room || '') + '</span>' +
+        '</div>' +
+        (s.foe ? side(s.foe, '상대', 'is-foe') : '');
     }
 
     // ── 잡일 ───────────────────────────────────────────
