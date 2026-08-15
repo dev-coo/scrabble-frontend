@@ -340,9 +340,9 @@ body{margin:0;padding:0;background:var(--paper);color:var(--ink);font-family:var
   .nb-side{padding:11px 12px}
 }
 
-.stage-foot{display:flex;gap:0;margin-top:18px}
-.stage-foot .btn-cancel{flex:1;margin-left:-1px;height:40px}
-.stage-foot .btn-cancel:first-child{margin-left:0}
+.stage-foot{display:flex;align-items:center;gap:12px;margin-top:18px}
+.stage-foot .btn-cancel{flex:1;height:40px}
+#rackBox{margin:0 0 14px}
 
 /* ── 알림 한 줄 (대기실 맨 위) ───────────────────────────
    주소창에 /game 을 직접 쳐서 들어온 것처럼, 단계와 상관없이

@@ -1,0 +1,197 @@
+/* ─────────────────────────────────────────────────────────────
+   스크래블 — 칩(타일) 과 칩 받침대
+
+   rack.js 와 한 쌍입니다.
+
+     <link rel="stylesheet" href="game/rack.css" />
+     <script src="game/rack.js"></script>
+
+   ── 칩을 왜 이렇게 그리나 ────────────────────────────────
+   화면의 다른 것들은 종이에 인쇄된 것처럼 납작합니다. 칩만 두껍게
+   만든 이유는, 칩이 이 게임에서 유일하게 손으로 집어 옮기는 물건이기
+   때문입니다. 집을 수 있게 생겨야 집고 싶어집니다.
+
+   두께는 그림자로 냅니다. 아래쪽으로 깔린 단색 그림자가 옆면이 되고,
+   그 아래 번진 그림자가 판 위에 떠 있는 높이가 됩니다.
+   ───────────────────────────────────────────────────────────── */
+
+.rack-wrap{
+  /* 나무 색. 화면의 크림 종이보다 노랗고 진해서, 종이 위에 놓인
+     다른 재질로 읽힙니다. */
+  --chip-top:#F8EFD9;
+  --chip-mid:#EFE1BE;
+  --chip-low:#E2CFA4;
+  --chip-side:#B2955E;
+  --chip-edge:var(--rule, #15120E);
+  --chip-ink:var(--ink, #15120E);
+  --chip-back:#9DB6CE;      /* 뒷면 — 상대 칩 */
+  --chip-back-side:#6E88A1;
+  --rack-wood:#D9C9A3;
+}
+
+/* ── 칩 한 장 ──────────────────────────────────────────── */
+.chip{
+  position:relative;
+  display:grid;
+  place-items:center;
+  flex:none;
+  width:var(--chip-w,48px);
+  height:var(--chip-w,48px);
+  background:linear-gradient(158deg,var(--chip-top) 0%,var(--chip-mid) 48%,var(--chip-low) 100%);
+  border:1.5px solid var(--chip-edge);
+  color:var(--chip-ink);
+  font-family:var(--font-display,"Helvetica Neue",Helvetica,Arial,sans-serif);
+  font-size:calc(var(--chip-w,48px) * .46);
+  font-weight:700;
+  line-height:1;
+  user-select:none;
+  /* 안쪽 밝은 선 = 위에서 빛을 받는 면, 안쪽 어두운 선 = 반대쪽 모서리,
+     아래 단색 그림자 = 칩의 옆면(두께), 번진 그림자 = 떠 있는 높이 */
+  box-shadow:
+    inset 2px 2px 0 rgba(255,255,255,.8),
+    inset -2px -2px 0 rgba(120,96,54,.28),
+    0 4px 0 var(--chip-side),
+    0 7px 11px rgba(21,18,14,.26);
+}
+
+/* 오른쪽 아래 작은 숫자 — 진짜 칩에 찍힌 점수입니다. */
+.chip-pip{
+  position:absolute;
+  right:calc(var(--chip-w,48px) * .09);
+  bottom:calc(var(--chip-w,48px) * .04);
+  font-family:var(--font-mono,ui-monospace,Menlo,monospace);
+  font-size:calc(var(--chip-w,48px) * .2);
+  font-weight:400;
+  opacity:.62;
+}
+
+/* 빈 타일. 아무 글자로나 쓸 수 있는 대신 0점입니다.
+   글자가 없으니 점수도 적지 않습니다 — 0 을 적으면 0점짜리 글자가
+   있는 것처럼 보입니다. */
+.chip.is-blank{
+  background:linear-gradient(158deg,#FBF6E9 0%,#F2EAD6 48%,#E6DBBF 100%);
+  color:var(--ink-faint,#A29A88);
+  font-size:calc(var(--chip-w,48px) * .34);
+}
+
+/* 뒷면 — 상대의 칩. 무엇인지 모르니 아무것도 적지 않습니다. */
+.chip.is-back{
+  background:linear-gradient(158deg,#B6CADD 0%,#9DB6CE 48%,#88A3BE 100%);
+  box-shadow:
+    inset 2px 2px 0 rgba(255,255,255,.5),
+    inset -2px -2px 0 rgba(60,84,108,.3),
+    0 3px 0 var(--chip-back-side),
+    0 5px 8px rgba(21,18,14,.22);
+}
+/* 뒷면 한가운데의 작은 마름모. 완전히 빈 면은 덜 그린 것처럼 보입니다. */
+.chip.is-back::after{
+  content:"";
+  width:26%;height:26%;
+  background:rgba(21,18,14,.16);
+  transform:rotate(45deg);
+}
+
+/* ── 내 칩 받침대 (화면 아래) ──────────────────────────── */
+.rack{
+  --chip-w:48px;
+  display:flex;
+  justify-content:center;
+  gap:7px;
+  padding:14px 14px 17px;
+  background:linear-gradient(180deg,var(--rack-wood) 0%,#C6B389 100%);
+  border:1.5px solid var(--rule,#15120E);
+  box-shadow:inset 0 2px 5px rgba(21,18,14,.18);
+}
+.rack-empty{
+  padding:22px 14px;
+  text-align:center;
+  font-size:13px;
+  color:var(--ink-soft,#6E675A);
+}
+
+/* ── 상대 칩 + 가방 (판 위 얇은 줄) ────────────────────── */
+.foes{
+  display:flex;
+  align-items:center;
+  gap:10px;
+  margin:0 0 13px;
+  padding:9px 12px;
+  background:var(--paper,#F3F0E8);
+  border:1.5px solid var(--rule,#15120E);
+}
+.foes-tiles{--chip-w:22px;display:flex;gap:3px;min-width:0;flex-wrap:wrap}
+.foes-label,.bag{
+  font-family:var(--font-mono,ui-monospace,Menlo,monospace);
+  font-size:10.5px;
+  letter-spacing:var(--track-caps,.16em);
+  text-transform:uppercase;
+  color:var(--ink-soft,#6E675A);
+  white-space:nowrap;
+}
+.bag{margin-left:auto}
+.bag b{color:var(--ink,#15120E);font-variant-numeric:tabular-nums}
+
+/* ── 배분 ──────────────────────────────────────────────
+   가방에서 꺼내 받침대에 놓는 모양입니다. 위쪽 바깥에서 떨어져
+   살짝 튕기고 자리를 잡습니다. 7장이 한꺼번에 나타나면 "생겼다"로
+   읽히고, 하나씩 놓이면 "나눠줬다"로 읽힙니다. */
+.chip.is-dealing{ animation:chip-deal .42s cubic-bezier(.22,1.2,.36,1) backwards }
+@keyframes chip-deal{
+  0%   { opacity:0; transform:translate(38px,-64px) rotate(14deg) scale(.86) }
+  70%  { opacity:1; transform:translate(0,4px) rotate(-2deg) scale(1.03) }
+  100% { opacity:1; transform:none }
+}
+
+/* 손을 올리면 집을 수 있다는 것만 알려줍니다. 아직 옮길 수는 없습니다. */
+@media (hover:hover){
+  .rack .chip{transition:transform .14s ease,box-shadow .14s ease}
+  .rack .chip:hover{
+    transform:translateY(-5px);
+    box-shadow:
+      inset 2px 2px 0 rgba(255,255,255,.8),
+      inset -2px -2px 0 rgba(120,96,54,.28),
+      0 6px 0 var(--chip-side),
+      0 12px 16px rgba(21,18,14,.3);
+  }
+}
+
+/* ── 소리 끄기 ─────────────────────────────────────────
+   소리는 켜 두되 끌 수 있어야 합니다. 끌 수 없는 소리는 무례합니다. */
+.snd{
+  display:inline-flex;align-items:center;gap:6px;
+  margin-left:auto;padding:4px 9px;
+  font-family:var(--font-mono,ui-monospace,Menlo,monospace);
+  font-size:10px;letter-spacing:var(--track-caps,.16em);text-transform:uppercase;
+  color:var(--ink-soft,#6E675A);
+  background:transparent;border:1px solid var(--grid,#C7C0AF);cursor:pointer;
+}
+.snd:hover{color:var(--ink,#15120E);border-color:var(--rule,#15120E)}
+.snd-dot{width:7px;height:7px;background:var(--ok,#1F6B4A);border:1px solid var(--rule,#15120E)}
+.snd[aria-pressed="false"] .snd-dot{background:transparent}
+
+@media (max-width:560px){
+  .rack{--chip-w:38px;gap:5px;padding:11px 8px 14px}
+}
+@media (max-width:400px){
+  .rack{--chip-w:32px;gap:4px}
+}
+
+@media (prefers-reduced-motion:reduce){
+  .chip.is-dealing{animation:none}
+  .rack .chip{transition:none}
+  .rack .chip:hover{transform:none}
+}
+
+/* ── 칩이 앉는 자리 ──────────────────────────────────────
+   칩이 판에 나가도 자리는 남깁니다. 자리가 사라지면 남은 칩들이
+   좌우로 밀려서, 내가 어느 칩을 집었는지 눈으로 놓치게 됩니다. */
+.slot{
+  width:var(--chip-w,48px); height:var(--chip-w,48px); flex:none;
+  display:grid; place-items:center;
+}
+.slot.is-out{
+  border:1.5px dashed rgba(21,18,14,.24);
+  background:rgba(21,18,14,.05);
+}
+.rack .chip{ cursor:grab; touch-action:none }
+.rack .chip:active{ cursor:grabbing }
