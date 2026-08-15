@@ -11,6 +11,7 @@
   <!-- 게임판·칩. 게임 화면에서만 쓰지만, 파일이라 미리 불러둡니다. -->
   <link rel="stylesheet" href="game/board.css" />
   <link rel="stylesheet" href="game/rack.css" />
+  <link rel="stylesheet" href="game/guide.css" />
 </head>
 <body>
 
@@ -41,6 +42,8 @@
         <div class="tile">B</div><div class="tile">B</div><div class="tile">L</div><div class="tile">E</div>
       </div>
       <h1>대기실</h1>
+      <!-- 사용설명서 버튼. 내용은 백엔드가 준 규칙으로 채웁니다. -->
+      <div id="guideBox"></div>
     </div>
 
     <div class="stepper" id="stepper">
@@ -91,6 +94,7 @@
 <script src="game/sfx.js"></script>
 <script src="game/board.js"></script>
 <script src="game/rack.js"></script>
+<script src="game/guide.js"></script>
 
 <script>
   (function () {
@@ -616,12 +620,35 @@
       if (!playing) $('lobbyView').className = 'lobby';
 
       renderNote();
+      renderGuideButton();
       renderStepper();
       renderStep1();
       renderStep2();
       renderStep3();
       renderGame();
       syncChat();
+    }
+
+    // ── 사용설명서 버튼 ────────────────────────────────
+    // 규칙표를 백엔드에서 받아온 뒤에야 열립니다. 받기 전에 열면
+    // 점수표가 빈 설명서를 보여주게 되는데, 그건 설명이 아닙니다.
+    function renderGuideButton() {
+      var box = $('guideBox');
+      if (!box) return;
+
+      if (!box.firstChild) {
+        box.innerHTML =
+          '<button class="guide-open" id="guideBtn" type="button">' +
+            '<i aria-hidden="true">?</i><span>게임 설명서</span></button>';
+        $('guideBtn').addEventListener('click', function () {
+          if (gameSetup) Guide.open(gameSetup);
+        });
+      }
+
+      // 규칙을 아직 못 받았으면 잠가둡니다. 왜 잠겼는지도 적습니다.
+      var btn = $('guideBtn');
+      btn.disabled = !gameSetup;
+      btn.title = gameSetup ? '' : '게임 규칙을 백엔드에서 받아오는 중입니다';
     }
 
     function renderNote() {

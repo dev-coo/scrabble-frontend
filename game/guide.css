@@ -1,0 +1,146 @@
+/* ─────────────────────────────────────────────────────────────
+   스크래블 — 사용설명서
+
+   guide.js 와 한 쌍입니다.
+
+   ── 왜 덮어쓰는 창인가 ───────────────────────────────────
+   설명서는 대기실 어디서든 열 수 있어야 하고, 읽고 나면 하던 자리로
+   그대로 돌아와야 합니다. 다른 페이지로 넘기면 방을 만들어 둔 상태가
+   날아갑니다. 그래서 화면 위에 덮었다가 걷어냅니다.
+   ───────────────────────────────────────────────────────────── */
+
+/* 뒤에 깔리는 어두운 막. 이걸 눌러도 닫힙니다. */
+.guide-veil{
+  position:fixed; inset:0; z-index:80;
+  background:rgba(21,18,14,.55);
+  display:grid; place-items:center;
+  padding:20px;
+  animation:guide-veil .18s ease both;
+}
+@keyframes guide-veil{from{opacity:0}}
+
+.guide{
+  position:relative;
+  width:100%; max-width:620px; max-height:100%;
+  display:flex; flex-direction:column;
+  background:var(--paper-2,#FBF9F3);
+  border:1.5px solid var(--rule,#15120E);
+  box-shadow:7px 7px 0 rgba(21,18,14,.22);
+  animation:guide-in .26s cubic-bezier(.2,.75,.3,1) both;
+}
+@keyframes guide-in{from{opacity:0;transform:translateY(16px)}}
+
+/* ── 머리 ─────────────────────────────────────────────── */
+.guide-head{
+  flex:none;
+  display:flex; align-items:center; gap:12px;
+  padding:18px 20px;
+  background:var(--theme-tint,#E7F0F8);
+  border-bottom:1.5px solid var(--rule,#15120E);
+}
+.guide-head h2{
+  margin:0; flex:1; min-width:0;
+  font-size:16px; font-weight:700; letter-spacing:-.01em;
+}
+.guide-tiles{display:flex;flex:none}
+.guide-tiles i{
+  width:22px;height:26px;margin-left:-1px;display:grid;place-items:center;
+  background:var(--theme,#A9C8E4);border:1px solid var(--rule,#15120E);
+  font-family:var(--font-display,Helvetica,Arial,sans-serif);
+  font-size:11px;font-weight:700;font-style:normal;color:var(--ink,#15120E);
+}
+.guide-tiles i:first-child{margin-left:0}
+.guide-x{
+  flex:none; width:32px; height:32px; display:grid; place-items:center;
+  background:transparent; border:1.5px solid var(--grid,#C7C0AF);
+  color:var(--ink-soft,#6E675A); font-size:16px; line-height:1; cursor:pointer;
+}
+.guide-x:hover{border-color:var(--rule,#15120E);color:var(--ink,#15120E)}
+
+/* ── 본문 ─────────────────────────────────────────────── */
+.guide-body{
+  overflow-y:auto; -webkit-overflow-scrolling:touch;
+  padding:4px 20px 22px;
+}
+.guide-sec{padding:20px 0 0;border-top:1px solid var(--grid,#C7C0AF);margin-top:20px}
+.guide-sec:first-child{border-top:none;margin-top:0}
+.guide-sec h3{
+  display:flex;align-items:center;gap:8px;
+  margin:0 0 10px;font-size:13.5px;font-weight:700;
+}
+.guide-no{
+  width:19px;height:19px;flex:none;display:grid;place-items:center;
+  background:var(--theme,#A9C8E4);border:1px solid var(--rule,#15120E);
+  font-family:var(--font-mono,ui-monospace,Menlo,monospace);font-size:10px;font-weight:400;
+}
+.guide-sec p{margin:0 0 9px;font-size:13.5px;line-height:1.75;color:var(--ink-soft,#6E675A)}
+.guide-sec p:last-child{margin-bottom:0}
+.guide-sec b{color:var(--ink,#15120E);font-weight:600}
+.guide-sec ul{margin:0 0 9px;padding-left:19px;font-size:13.5px;line-height:1.8;color:var(--ink-soft,#6E675A)}
+.guide-sec li::marker{color:var(--ink-faint,#A29A88)}
+
+/* 배수 칸 설명 — 판에서 쓰는 색을 그대로 씁니다. 설명서에서 본 색이
+   판에서 다르면 설명서를 두 번 읽게 됩니다. */
+.guide-keys{display:grid;grid-template-columns:repeat(auto-fit,minmax(122px,1fr));gap:7px;margin:0 0 10px}
+.gkey{display:flex;align-items:center;gap:8px;font-size:12px;color:var(--ink-soft,#6E675A)}
+.gkey i{
+  width:32px;height:32px;flex:none;display:grid;place-items:center;
+  border:1px solid var(--rule,#15120E);
+  font-family:var(--font-mono,ui-monospace,Menlo,monospace);font-size:8px;
+  font-style:normal;line-height:1.1;text-align:center;color:var(--ink,#15120E);
+}
+.gkey.tw i{background:#BE5540;color:#FFF6EE}
+.gkey.dw i{background:#DFA08D}
+.gkey.tl i{background:#3D7396;color:#F2F8FC}
+.gkey.dl i{background:#B6D2E8}
+.gkey.st i{background:#D9A93C;font-size:14px}
+
+/* 글자 점수표 — 점수별로 묶습니다. 27줄을 늘어놓으면 아무도 안 읽습니다. */
+.guide-pts{display:flex;flex-direction:column;gap:6px;margin:0 0 10px}
+.gpt{display:flex;align-items:center;gap:10px}
+.gpt-n{
+  flex:none;width:40px;
+  font-family:var(--font-mono,ui-monospace,Menlo,monospace);font-size:11px;
+  font-variant-numeric:tabular-nums;color:var(--ink,#15120E);text-align:right;
+}
+.gpt-l{
+  flex:1;min-width:0;
+  font-family:var(--font-mono,ui-monospace,Menlo,monospace);font-size:12px;
+  letter-spacing:.06em;color:var(--ink-soft,#6E675A);word-break:break-all;
+}
+
+/* 아직 안 되는 것 — 못 하는 일을 숨기지 않습니다. */
+.guide-todo{
+  margin:10px 0 0;padding:12px 14px;
+  background:var(--bad-tint,#F7E5E4);border:1px solid var(--rule,#15120E);
+  font-size:12.5px;line-height:1.7;color:var(--ink,#15120E);
+}
+.guide-todo b{font-weight:600}
+
+/* ── 여는 버튼 (대기실 머리에 붙습니다) ────────────────── */
+.guide-open{
+  display:inline-flex;align-items:center;gap:7px;
+  margin:14px 0 0;padding:7px 13px;
+  font-family:var(--font-mono,ui-monospace,Menlo,monospace);
+  font-size:10.5px;letter-spacing:var(--track-caps,.16em);text-transform:uppercase;
+  color:var(--ink,#15120E);background:var(--paper-2,#FBF9F3);
+  border:1.5px solid var(--rule,#15120E);cursor:pointer;
+}
+.guide-open:hover{background:var(--theme-tint,#E7F0F8)}
+.guide-open:disabled{cursor:default;color:var(--ink-faint,#A29A88);border-color:var(--grid,#C7C0AF);background:transparent}
+.guide-open i{
+  width:16px;height:19px;flex:none;display:grid;place-items:center;
+  background:var(--theme,#A9C8E4);border:1px solid var(--rule,#15120E);
+  font-family:var(--font-display,Helvetica,Arial,sans-serif);
+  font-size:10px;font-weight:700;font-style:normal;
+}
+.guide-open:disabled i{background:transparent;border-color:var(--grid,#C7C0AF)}
+
+@media (max-width:520px){
+  .guide-veil{padding:0}
+  .guide{max-width:none;height:100%;border:none}
+  .guide-body{padding:4px 16px 22px}
+}
+@media (prefers-reduced-motion:reduce){
+  .guide-veil,.guide{animation:none}
+}
