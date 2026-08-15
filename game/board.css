@@ -1,0 +1,122 @@
+/* ─────────────────────────────────────────────────────────────
+   스크래블 — 게임판 (겉모습)
+
+   board.js 와 한 쌍입니다. 페이지에서 이렇게 씁니다:
+
+     <link rel="stylesheet" href="game/board.css" />
+     <script src="game/board.js"></script>
+
+   ── 왜 따로 두나 ─────────────────────────────────────────
+   채팅과 같은 이유입니다. 게임판은 덩치가 커서 index.html 안에 넣으면
+   대기실 코드가 파묻힙니다. 한 벌로 떼어두면 게임판 색만 고칠 때
+   이 파일만 열면 됩니다.
+
+   ── 색을 왜 이렇게 골랐나 ────────────────────────────────
+   진짜 스크래블 상자는 새빨강·형광분홍을 씁니다. 그대로 가져오면
+   이 프로젝트의 크림 종이 화면에서 혼자 튀어, 게임판만 다른 앱에서
+   오려붙인 것처럼 보입니다.
+
+   그래서 칸의 "자리"는 표준 그대로 두되(그래야 스크래블을 아는 사람이
+   바로 알아봅니다), 색은 한 단계씩 눌러 인쇄된 판처럼 만들었습니다.
+   ───────────────────────────────────────────────────────────── */
+
+.board-wrap{
+  /* 색은 여기 모아둡니다. 게임판 색만 바꾸려면 이 일곱 줄만 고치면
+     됩니다. 값이 없으면 뒤의 것을 씁니다 — 전역 토큰이 없는 화면에
+     떼어다 붙여도 그냥 동작하게 하려는 것입니다. */
+  --sq:#EFEADE;                        /* 아무것도 아닌 칸 */
+  --sq-tw:#BE5540;                     /* 낱말 3배 — 가장 센 칸이 가장 진합니다 */
+  --sq-dw:#DFA08D;                     /* 낱말 2배 */
+  --sq-tl:#3D7396;                     /* 글자 3배 */
+  --sq-dl:#B6D2E8;                     /* 글자 2배 */
+  --sq-star:var(--gold, #D9A93C);      /* 한가운데 — 첫 낱말을 놓는 자리 */
+  --bd-rule:var(--rule, #15120E);
+  --bd-grid:var(--grid, #C7C0AF);
+  --bd-paper:var(--paper, #F3F0E8);
+  --bd-ink:var(--ink, #15120E);
+  --bd-mono:var(--font-mono, ui-monospace, Menlo, monospace);
+
+  /* 판은 언제나 정사각형입니다. 가로가 좁아지면 세로도 같이 줄어야
+     칸이 찌그러지지 않습니다. */
+  width:100%;
+  max-width:620px;
+  margin:0 auto;
+}
+
+/* 판을 담는 테두리. 진짜 보드게임의 나무 트레이처럼 판이 살짝 안으로
+   들어가 보이게 안쪽 그림자를 넣었습니다. 판이 종이 위에 떠 있는 게
+   아니라 박혀 있는 느낌이 나야 "놓는 자리"로 읽힙니다. */
+.board-frame{
+  padding:9px;
+  background:var(--bd-paper);
+  border:1.5px solid var(--bd-rule);
+  box-shadow:inset 0 3px 9px rgba(21,18,14,.13);
+}
+
+/* 15 × 15. gap 을 1px 로 두고 그 틈으로 뒷배경(격자선)이 비치게 하면,
+   칸마다 테두리를 그리는 것보다 선이 고르게 나옵니다. */
+.board-grid{
+  display:grid;
+  grid-template-columns:repeat(15,1fr);
+  aspect-ratio:1;
+  gap:1px;
+  background:var(--bd-grid);
+  border:1px solid var(--bd-rule);
+  /* 칸 안 글씨 크기를 판 너비에 맞춰 줄이고 늘리기 위한 기준점입니다.
+     화면 전체(vw)가 아니라 판의 너비를 기준으로 삼아야, 판을 어디에
+     놓든 글씨 비율이 그대로 유지됩니다. */
+  container-type:inline-size;
+}
+
+.sq{
+  position:relative;
+  background:var(--sq);
+  display:grid;
+  place-items:center;
+  text-align:center;
+  line-height:1.15;
+  font-family:var(--bd-mono);
+  /* cqi = 이 칸을 담은 판 너비의 1%. 판이 620px 이면 약 9px,
+     360px 이면 약 5.5px 가 됩니다. */
+  font-size:clamp(5px, 1.5cqi, 9.5px);
+  letter-spacing:.02em;
+  color:var(--bd-ink);
+  user-select:none;
+}
+
+/* 배수 칸. 안쪽에 옅은 테를 하나 둘러 종이에 찍힌 것처럼 보이게 합니다. */
+.sq.is-tw,.sq.is-dw,.sq.is-tl,.sq.is-dl,.sq.is-star{
+  box-shadow:inset 0 0 0 1px rgba(255,255,255,.22);
+}
+.sq.is-tw{ background:var(--sq-tw); color:#FFF6EE }
+.sq.is-dw{ background:var(--sq-dw) }
+.sq.is-tl{ background:var(--sq-tl); color:#F2F8FC }
+.sq.is-dl{ background:var(--sq-dl) }
+
+/* 한가운데 별. 첫 낱말은 반드시 여기를 지나야 해서, 판에서 유일하게
+   "여기서 시작"이라는 뜻을 가진 칸입니다. 그래서 글자 대신 별을 넣고
+   게임 시작 버튼과 같은 금색을 씁니다. */
+.sq.is-star{
+  background:var(--sq-star);
+  font-size:clamp(9px, 3.2cqi, 20px);
+  color:var(--bd-ink);
+}
+
+.sq-x{ display:block }          /* 2배 / 3배 */
+.sq-y{ display:block; opacity:.8 }   /* 낱말 / 글자 */
+
+/* 판이 아주 좁아지면 글씨를 지웁니다. 읽히지도 않는 글씨가 남아 있으면
+   칸이 지저분해 보이기만 합니다. 색만으로도 어떤 칸인지 구분됩니다. */
+@container (max-width: 330px){
+  .sq-x,.sq-y{ display:none }
+}
+
+/* 아직 아무것도 놓을 수 없습니다. 그래도 빈 칸에 손을 올리면 살짝
+   밝아지게 해서, 여기가 무언가 놓는 자리라는 것만 알려줍니다. */
+@media (hover:hover){
+  .sq:hover{ filter:brightness(1.06) }
+}
+
+@media (prefers-reduced-motion:reduce){
+  .sq:hover{ filter:none }
+}

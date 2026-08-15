@@ -297,3 +297,7 @@
 ### [2026-08-15 14:58:41] ellie
 
 > 커밋하자. 그리고 스크램플 게임 공간이 비어 있으니까  이미지를 만들려고해 인터넷 자료는 참고하지만 더 멋지고1.  사용자에게 매력적인 스크램플 보드판을 구성하자. 2.  나와 상대방 이름이 나오게 하고 내가 갖는 7개의 칩이 3D 스타일의 칩이 나오게 하자. 나는 화면 아래 7개 칩이 보이게 하고 맨 위에는 나와 상대 이름과 그 중간에는 나와 상대의 스코어와 타임이 표시되게 하자. 순서대로 진행하자. https://m.blog.naver.com/trip2earth/220612257180  https://freeship.co.kr/goods/content.asp?guid=4056937&sitecate=mall&cate=545&srsltid=AfmBOor4Ld6Sde5MivVF85sCICQ3DJhVW-qf64TOBRTHSjrv5v2kYlZs
+
+### [2026-08-15 15:08:48] ellie
+
+> 커밋하고 상단 이름 바부터 하자 상단 이름은 각자 정한 닉네임으로 보이게 해줘

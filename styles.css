@@ -279,8 +279,12 @@ body{margin:0;padding:0;background:var(--paper);color:var(--ink);font-family:var
    아직 게임판은 없습니다. 지금은 "정말 시작됐다"는 것과 누구
    차례인지만 보여주는 껍데기입니다. 없는 것을 그려두면 되는
    것처럼 보이므로, 없는 것은 없다고 적어둡니다. */
-.stage{max-width:520px;margin:0 auto;background:var(--paper-2);border:1.5px solid var(--rule);
+/* 게임 화면은 대기실보다 넓습니다. 대기실은 위에서 아래로 한 단계씩
+   밟는 화면이라 좁은 편이 빠르지만, 게임판은 15칸이 가로로 늘어서 있어
+   좁히면 칸이 손톱만 해집니다. */
+.stage{max-width:680px;margin:0 auto;background:var(--paper-2);border:1.5px solid var(--rule);
   animation:stage-in .5s cubic-bezier(.2,.7,.3,1) both}
+#boardBox{margin:0 0 14px}
 @keyframes stage-in{from{opacity:0;transform:translateY(18px)}}
 
 .stage-crown{padding:26px;border-bottom:1.5px solid var(--rule);text-align:center;background:var(--gold-tint)}
