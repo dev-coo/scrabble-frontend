@@ -376,17 +376,150 @@ body{margin:0;padding:0;background:var(--paper);color:var(--ink);font-family:var
   .blank-grid{grid-template-columns:repeat(6,1fr)}
 }
 
-/* ── 제출 줄 ─────────────────────────────────────────────
-   칩을 올려두고 "놓기"를 누르는 자리입니다. */
-.move{display:flex;align-items:center;gap:10px;margin:0 0 14px}
+/* ═══════════════════════════════════════════════════════════
+   게임 중 행동 줄
+
+   화면의 나머지는 종이에 인쇄된 letterpress 입니다 — 각지고, 얇은
+   선이고, 조용합니다. 그 위에서 "지금 누를 것"만 다르게 생겨야
+   손이 갑니다.
+
+   그래서 버튼만 모서리를 둥글리고 두껍게 만들었습니다. 색은 새로
+   들여오지 않고 원래 쓰던 크림·하늘색·금색·주홍을 그대로 쓰되
+   면적을 키웠습니다. 낯선 색을 새로 칠하면 이 줄만 다른 앱에서
+   오려붙인 것처럼 보입니다.
+   ═══════════════════════════════════════════════════════════ */
+.acts{
+  margin:0 0 14px;
+  border:1.5px solid var(--rule);
+  background:var(--paper-2);
+}
+.acts-top{
+  display:flex;align-items:center;gap:9px;
+  padding:10px 12px;
+  border-bottom:1px solid var(--grid);
+  background:linear-gradient(180deg,var(--paper) 0%,var(--paper-2) 100%);
+}
+.acts-main{display:flex;align-items:center;gap:9px;padding:12px}
+
+/* ── 신호등 ─────────────────────────────────────────────
+   세 번 연속 넘어가면 게임이 끝납니다. 숫자로만 적으면 읽어야
+   알지만, 불이 켜지면 곁눈으로도 보입니다. */
+.lamps{
+  display:flex;align-items:center;gap:6px;
+  flex:1;min-width:0;
+  padding:5px 10px 5px 8px;
+  background:var(--paper-2);
+  border:1.5px solid var(--rule);
+  border-radius:999px;
+}
+.lamp{
+  width:11px;height:11px;flex:none;border-radius:50%;
+  background:transparent;
+  border:1.5px solid var(--grid);
+  transition:background .25s ease,border-color .25s ease,box-shadow .25s ease;
+}
+/* 켜지는 순서대로 초록 → 노랑 → 빨강. 마지막 불이 켜지면 끝납니다. */
+.lamp.is-on.l1{background:var(--ok);border-color:var(--rule);box-shadow:0 0 0 3px rgba(31,107,74,.18)}
+.lamp.is-on.l2{background:var(--gold);border-color:var(--rule);box-shadow:0 0 0 3px rgba(217,169,60,.22)}
+.lamp.is-on.l3{background:var(--bad);border-color:var(--rule);box-shadow:0 0 0 3px rgba(178,58,58,.2);
+  animation:lamp-last 1.1s ease-in-out infinite}
+@keyframes lamp-last{50%{box-shadow:0 0 0 7px rgba(178,58,58,0)}}
+.lamps-say{
+  margin-left:4px;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;
+  font-family:var(--font-mono);font-size:10.5px;letter-spacing:.03em;color:var(--ink-soft);
+}
+
+/* ── 버튼 ───────────────────────────────────────────────
+   둥근 모서리와 두께는 여기서만 씁니다. 누르면 아래로 눌리는
+   느낌이 나도록 밑에 깔린 그림자를 줄입니다 — 칩과 같은 방식이라
+   화면 안에서 같은 물성으로 읽힙니다. */
+.btn-soft,.btn-put{
+  flex:none;
+  height:40px;padding:0 16px;
+  font-family:var(--font-text);font-size:13px;font-weight:600;letter-spacing:-.01em;
+  border:1.5px solid var(--rule);border-radius:11px;cursor:pointer;
+  transition:transform .1s ease,box-shadow .1s ease,background .15s ease;
+}
+.btn-soft{background:var(--paper-2);color:var(--ink);box-shadow:0 3px 0 var(--grid)}
+.btn-soft:hover:not(:disabled){background:var(--theme-tint)}
+.btn-soft.is-quit{color:var(--bad)}
+.btn-soft.is-quit:hover:not(:disabled){background:var(--bad-tint)}
+
+.btn-put{background:var(--theme);color:var(--ink);box-shadow:0 3px 0 var(--theme-deep);padding:0 22px}
+.btn-put:hover:not(:disabled){background:var(--theme-deep)}
+/* 확정 단계에서는 금색으로 바뀝니다. 되돌릴 수 없는 버튼은
+   방금 전과 달라 보여야 손이 한 번 멈춥니다.
+
+   ⚠️ hover 규칙도 함께 적어야 합니다. 위의 :hover:not() 은 선택자가
+   셋이라 .btn-put.is-sure 보다 세서, 마우스를 올리는 순간 색이
+   원래대로 돌아가 버립니다. */
+.btn-put.is-sure,
+.btn-put.is-sure:hover:not(:disabled){background:var(--gold);box-shadow:0 3px 0 var(--gold-deep)}
+.btn-put.is-sure:hover:not(:disabled){background:var(--gold-deep)}
+.btn-put.is-quit,
+.btn-put.is-quit:hover:not(:disabled){background:var(--bad);color:#fff;box-shadow:0 3px 0 #7E2828}
+.btn-put.is-quit:hover:not(:disabled){background:#9C3131}
+
+.btn-soft:active:not(:disabled),.btn-put:active:not(:disabled){
+  transform:translateY(3px);box-shadow:0 0 0 var(--grid);
+}
+.btn-soft:disabled,.btn-put:disabled{
+  cursor:not-allowed;background:transparent;color:var(--ink-faint);
+  border-color:var(--grid);box-shadow:none;
+}
+
 .move-say{flex:1;min-width:0;font-size:13px;color:var(--ink-soft);
   overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .move-say.is-bad{color:var(--bad)}
 .move-say.is-ok{color:var(--ok)}
-.move .btn-cancel{flex:none;height:38px}
-.btn-put{flex:none;height:38px;padding:0 20px;
-  font-family:var(--font-display);font-size:12px;font-weight:700;
-  letter-spacing:var(--track-caps);text-transform:uppercase;
-  color:var(--ink);background:var(--theme);border:1.5px solid var(--rule);cursor:pointer}
-.btn-put:hover:not(:disabled){background:var(--theme-deep)}
-.btn-put:disabled{cursor:not-allowed;background:transparent;color:var(--ink-faint);border-color:var(--grid)}
+.move-say.is-ask{color:var(--ink);font-weight:600}
+
+/* ── 점수판 (이름 바 가운데) ───────────────────────────── */
+.nb-score{display:flex;align-items:baseline;gap:5px;font-variant-numeric:tabular-nums}
+.nb-score b{font-family:var(--font-display);font-size:19px;font-weight:700}
+.nb-score i{font-style:normal;font-size:12px;color:var(--ink-faint)}
+
+/* ── 물어보는 창 (나가기 확인) ─────────────────────────── */
+.ask{
+  width:100%;max-width:360px;padding:24px;
+  background:var(--paper-2);border:1.5px solid var(--rule);border-radius:16px;
+  box-shadow:6px 6px 0 rgba(21,18,14,.2);text-align:center;
+}
+.ask-head{margin:0 0 8px;font-size:17px;font-weight:700}
+.ask-say{margin:0 0 20px;font-size:13.5px;line-height:1.7;color:var(--ink-soft)}
+.ask-row{display:flex;gap:9px}
+.ask-row>*{flex:1}
+
+/* ── 끝났을 때 ─────────────────────────────────────────
+   판 위에 덮지 않고 아래에 붙입니다. 마지막 판을 보면서 결과를
+   읽을 수 있어야 "어쩌다 이렇게 됐는지"가 남습니다. */
+.over{
+  margin:0 0 14px;padding:20px;text-align:center;
+  background:var(--paper);border:1.5px solid var(--rule);border-radius:16px;
+  animation:over-in .4s cubic-bezier(.2,.8,.3,1) both;
+}
+@keyframes over-in{from{opacity:0;transform:translateY(10px)}}
+.over.is-win{background:var(--gold-tint)}
+.over.is-lose{background:var(--paper)}
+.over-tag{margin:0 0 4px;font-size:22px;font-weight:800;letter-spacing:-.02em}
+.over.is-win .over-tag{color:var(--gold-deep)}
+.over-why{margin:0 0 16px;font-size:13px;color:var(--ink-soft)}
+.over-score{display:flex;align-items:center;justify-content:center;gap:14px;margin:0 0 18px}
+.over-score span{display:flex;flex-direction:column;gap:2px;font-size:11.5px;color:var(--ink-soft)}
+.over-score b{font-family:var(--font-display);font-size:30px;font-weight:700;color:var(--ink);
+  font-variant-numeric:tabular-nums}
+.over-score i{font-style:normal;font-size:16px;color:var(--ink-faint)}
+.over-wait{margin:0;font-size:12.5px;color:var(--ink-soft)}
+
+@media (max-width:560px){
+  .acts-top{flex-wrap:wrap}
+  .lamps{flex:1 1 100%;order:-1}
+  .acts-top .btn-soft{flex:1}
+  .acts-main{flex-wrap:wrap}
+  .move-say{flex:1 1 100%;order:-1;white-space:normal}
+  .acts-main .btn-soft,.acts-main .btn-put{flex:1;padding:0 10px}
+}
+@media (prefers-reduced-motion:reduce){
+  .lamp.is-on.l3,.over{animation:none}
+  .btn-soft,.btn-put{transition:none}
+}

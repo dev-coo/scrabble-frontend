@@ -152,6 +152,11 @@
       confirming: false, // 제출하기를 눌러 확정을 기다리는 중
       moveNote: null,  // 제출 결과 (사전에 없는 단어 등)
       moveBad: false,
+      scores: null,    // { host, guest } — 서버가 계산한 누적 점수
+      side: null,      // 'host' | 'guest' — 점수판에서 내 자리
+      passes: 0,       // 연속으로 넘어간 횟수 (서버가 셉니다)
+      passLeft: 3,     // 몇 번 더 넘기면 끝나는지
+      over: null       // 끝났을 때 서버가 준 결과
     };
 
     function blank() {
@@ -613,6 +618,45 @@
         // 내 차례가 되었으면 한 번 더 알려줍니다. 판만 바뀌면 상대가
         // 둔 것을 보고도 내 차례인 줄 모르고 기다리게 됩니다.
         if (s.myTurn) later(function () { Sfx.turn(); }, 420);
+        render();
+        return true;
+      }
+
+      // 누군가 차례를 넘겼습니다. 양쪽 모두에게 옵니다.
+      if (msg.type === 'turn_passed') {
+        s.turn = msg.turn || null;
+        s.myTurn = !!msg.your_turn;
+        s.passes = msg.passes || 0;
+        s.passLeft = (typeof msg.passes_until_end === 'number') ? msg.passes_until_end : 0;
+        if (msg.scores) s.scores = msg.scores;
+        s.submitting = false;
+        s.confirming = false;
+        s.moveNote = (msg.by || '') + ' 님이 차례를 넘겼어요';
+        s.moveBad = false;
+        // 신호등이 한 칸 켜지는 순간 띵~ 하고 울립니다. 남은 횟수가
+        // 줄수록 음이 낮아집니다.
+        Sfx.ding(s.passLeft);
+        render();
+        return true;
+      }
+
+      // 게임이 끝났습니다. 양쪽 모두에게 옵니다. 연결은 끊기지 않습니다 —
+      // 방장이 다시 시작하면 새 게임이 됩니다.
+      if (msg.type === 'game_over') {
+        s.over = {
+          reason: msg.reason || null,
+          winner: msg.winner || null,
+          youWon: msg.you_won,          // 비겼으면 null 입니다
+          scores: msg.scores || s.scores,
+          by: msg.by || null
+        };
+        if (msg.scores) s.scores = msg.scores;
+        if (msg.board && board) board.setBoard(msg.board);
+        s.myTurn = false;
+        s.submitting = false;
+        s.confirming = false;
+        if (play) play.accepted();
+        later(function () { Sfx.over(msg.you_won === true); }, 260);
         render();
         return true;
       }
@@ -1459,6 +1503,7 @@
             '<div id="boardBox"></div>' +
             '<div id="rackBox"></div>' +
             '<div id="moveBox"></div>' +
+            '<div id="overBox"></div>' +
             '<div class="stage-foot">' +
               '<button class="btn-cancel" id="toLobby" type="button">대기실 보기</button>' +
               '<button class="snd" id="sndBtn" type="button" aria-pressed="true">' +
@@ -1501,36 +1546,71 @@
 
       renderFoes();
       renderMove();
+      renderOver();
+
       // 매번 바뀌는 것만 다시 씁니다.
       renderNameBar();
     }
 
-    // ── 제출 줄 ────────────────────────────────────────
-    // 칩을 올려두고 "놓기"를 누르는 자리입니다. 받침대 바로 아래에
-    // 두어 칩 → 판 → 놓기 가 한 줄기로 읽히게 합니다.
+    // ── 행동 줄 ────────────────────────────────────────
+    // 지금 할 수 있는 일이 전부 여기 모입니다. 신호등 → 상황 → 버튼
+    // 순서로 왼쪽에서 오른쪽으로 읽히게 두었습니다.
     function renderMove() {
       var box = $('moveBox');
       if (!box) return;
 
       var draft = play ? play.draft() : [];
       var word = draft.map(function (t) { return t.letter; }).join('');
+      var done = !!s.over;
+
+      // 신호등 — 몇 번 더 넘기면 끝나는지. 서버가 세어 준 값입니다.
+      // 세 칸이 다 켜지면 게임이 끝납니다.
+      var lamps = '';
+      for (var i = 0; i < 3; i++) {
+        var lit = i < s.passes;
+        lamps += '<i class="lamp' + (lit ? ' is-on l' + (i + 1) : '') + '"></i>';
+      }
 
       box.innerHTML =
-        '<div class="move">' +
-          '<span class="move-say" id="moveSay"></span>' +
-          '<button class="btn-cancel" id="undoBtn" type="button">되돌리기</button>' +
-          '<button class="btn-put" id="putBtn" type="button">놓기</button>' +
+        '<div class="acts">' +
+          '<div class="acts-top">' +
+            '<div class="lamps" id="lamps" title="세 번 연속 넘기면 게임이 끝나요">' +
+              lamps +
+              '<span class="lamps-say">' +
+                (s.passes === 0 ? '넘기기 3번이면 끝'
+                                : s.passLeft + '번 더 넘기면 끝') +
+              '</span>' +
+            '</div>' +
+            '<button class="btn-soft" id="passBtn" type="button">차례 넘기기</button>' +
+            '<button class="btn-soft is-quit" id="quitBtn" type="button">나가기</button>' +
+          '</div>' +
+
+          '<div class="acts-main">' +
+            '<span class="move-say" id="moveSay"></span>' +
+            (s.confirming
+              ? '<button class="btn-soft" id="undoBtn" type="button">아니요</button>' +
+                '<button class="btn-put is-sure" id="putBtn" type="button">확정!</button>'
+              : '<button class="btn-soft" id="undoBtn" type="button">되돌리기</button>' +
+                '<button class="btn-put" id="putBtn" type="button">제출하기</button>') +
+          '</div>' +
         '</div>';
 
       var say = $('moveSay'), undo = $('undoBtn'), put = $('putBtn');
+      var pass = $('passBtn'), quit = $('quitBtn');
 
-      undo.disabled = !draft.length || s.submitting;
-      // 명세: 한 번에 1~7개. 한 개만 놓아도 이미 놓인 글자에 붙어
-      // 단어가 되면 인정됩니다.
-      put.disabled = !s.myTurn || s.submitting || draft.length < 1;
-      put.textContent = s.submitting ? '확인 중…' : '놓기';
+      pass.disabled = done || !s.myTurn || s.submitting;
+      quit.disabled = done;
+      undo.disabled = done || (!draft.length && !s.confirming) || s.submitting;
+      put.disabled = done || !s.myTurn || s.submitting || draft.length < 1;
+      if (s.submitting) put.textContent = '보내는 중…';
 
-      if (s.moveNote) {
+      if (done) {
+        say.className = 'move-say';
+        say.textContent = '게임이 끝났어요';
+      } else if (s.confirming) {
+        say.className = 'move-say is-ask';
+        say.textContent = word + ' — 이대로 낼까요?';
+      } else if (s.moveNote) {
         say.className = 'move-say' + (s.moveBad ? ' is-bad' : ' is-ok');
         say.textContent = s.moveNote;
       } else if (!s.myTurn) {
@@ -1545,11 +1625,109 @@
       }
 
       undo.addEventListener('click', function () {
+        // 확정을 묻는 중이면 물음만 거둡니다. 올려둔 칩은 그대로 둡니다 —
+        // "아니요"는 "그만두겠다"가 아니라 "아직"이라는 뜻입니다.
+        if (s.confirming) { s.confirming = false; render(); return; }
         s.moveNote = null; s.moveBad = false;
         play.clear();
         render();
       });
-      put.addEventListener('click', submitMove);
+
+      // ④ 제출확정 — 한 번 더 묻습니다.
+      // 낸 수는 되돌릴 수 없고, 사전에 없으면 차례만 날리는 게 아니라
+      // 다시 늘어놓아야 합니다. 한 번 묻는 값이 있습니다.
+      put.addEventListener('click', function () {
+        if (!s.confirming) { s.confirming = true; s.moveNote = null; render(); return; }
+        submitMove();
+      });
+
+      pass.addEventListener('click', function () {
+        if (!roomSock || roomSock.readyState !== 1) return;
+        s.confirming = false;
+        if (play) play.clear();
+        roomSock.send(JSON.stringify({ type: 'pass' }));
+      });
+
+      quit.addEventListener('click', askQuit);
+    }
+
+    // ── ① 나가기 ───────────────────────────────────────
+    // 나가면 점수와 상관없이 상대가 이깁니다(명세). 지고 있을 때
+    // 나가는 것이 이득이 되면 안 되기 때문입니다. 되돌릴 수 없으니
+    // 반드시 한 번 묻습니다.
+    function askQuit() {
+      var veil = document.createElement('div');
+      veil.className = 'guide-veil';
+      veil.innerHTML =
+        '<div class="ask">' +
+          '<p class="ask-head">정말 나갈까요?</p>' +
+          '<p class="ask-say">나가면 <b>' + esc(s.foe || '상대') + '</b> 님이 이긴 것이 돼요. ' +
+            '점수와 상관없이요.</p>' +
+          '<div class="ask-row">' +
+            '<button class="btn-soft" data-q="no" type="button">계속할래요</button>' +
+            '<button class="btn-put is-quit" data-q="yes" type="button">나갈래요</button>' +
+          '</div>' +
+        '</div>';
+      document.body.appendChild(veil);
+
+      function close() {
+        if (veil.parentNode) veil.parentNode.removeChild(veil);
+        document.removeEventListener('keydown', onKey);
+      }
+      function onKey(e) { if (e.key === 'Escape') close(); }
+      veil.addEventListener('click', function (e) {
+        var t = e.target.closest('[data-q]');
+        if (!t) { if (e.target === veil) close(); return; }
+        close();
+        if (t.dataset.q === 'yes' && roomSock && roomSock.readyState === 1) {
+          roomSock.send(JSON.stringify({ type: 'resign' }));
+        }
+      });
+      document.addEventListener('keydown', onKey);
+    }
+
+    // ── 끝났을 때 ──────────────────────────────────────
+    function renderOver() {
+      var box = $('overBox');
+      if (!box) return;
+      if (!s.over) { box.innerHTML = ''; return; }
+
+      var o = s.over;
+      var why = { finished: '칩이 다 떨어졌어요',
+                  passed: '세 번 연속으로 넘어갔어요',
+                  resigned: (o.by || '누군가') + ' 님이 나갔어요' }[o.reason] || '';
+
+      // 이겼는지는 you_won 으로 봅니다. 이름이 같으면 winner 비교로는
+      // 둘 다 이긴 것으로 나옵니다(명세 경고).
+      var tag = o.youWon === true ? '이겼어요!' : o.youWon === false ? '졌어요' : '비겼어요';
+      var mine = s.scores && s.side ? s.scores[s.side] : null;
+      var yours = s.scores && s.side ? s.scores[s.side === 'host' ? 'guest' : 'host'] : null;
+
+      box.innerHTML =
+        '<div class="over' + (o.youWon === true ? ' is-win' : o.youWon === false ? ' is-lose' : '') + '">' +
+          '<p class="over-tag">' + tag + '</p>' +
+          '<p class="over-why">' + esc(why) + '</p>' +
+          (mine != null
+            ? '<div class="over-score">' +
+                '<span><b>' + mine + '</b>' + esc(s.nick || '나') + '</span>' +
+                '<i>:</i>' +
+                '<span><b>' + yours + '</b>' + esc(s.foe || '상대') + '</span>' +
+              '</div>'
+            : '') +
+          (s.role === 'host'
+            ? '<button class="btn-put" id="againBtn" type="button">한 판 더</button>'
+            : '<p class="over-wait">방장이 다시 시작하기를 기다리는 중…</p>') +
+        '</div>';
+
+      if ($('againBtn')) {
+        // 명세: 방장이 start 를 다시 보내면 새 게임입니다.
+        $('againBtn').addEventListener('click', function () {
+          if (!roomSock || roomSock.readyState !== 1) return;
+          s.over = null;
+          render();
+          roomSock.send(JSON.stringify({ type: 'start' }));
+        });
+      }
     }
 
     // 놓은 칩들의 좌표를 보냅니다. 완성된 단어가 아니라 좌표를
@@ -1657,10 +1835,11 @@
       var box = $('nameBar');
       if (!box) return;
 
-      // 백엔드가 first_turn 을 알려주기 전에는 아무 쪽도 표시하지
-      // 않습니다. 둘 중 하나를 골라 두면 그건 지어낸 값입니다.
+      // 내 쪽 차례 표시는 your_turn 으로 정합니다. 닉네임을 비교하면
+      // 두 사람 이름이 같을 때 둘 다 자기 차례로 보입니다(명세 경고).
+      // 상대 쪽은 그 반대입니다.
       function side(name, role, cls) {
-        var turn = s.turn && s.turn === name;
+        var turn = s.turn && (cls === 'is-me' ? s.myTurn : !s.myTurn);
         return '<div class="nb-side ' + cls + (turn ? ' is-turn' : '') + '">' +
                  '<span class="nb-tile">' + esc(name.charAt(0)) + '</span>' +
                  '<span class="nb-who">' +
@@ -1673,12 +1852,16 @@
       box.className = 'namebar';
       box.innerHTML =
         side(s.nick, '나', 'is-me') +
-        // 가운데 — 나중에 스코어와 남은 시간이 들어올 자리입니다.
-        // 둘 다 백엔드가 정해서 알려줘야 하는 값이라 지금은 비워두고,
-        // 방 코드만 놓습니다. 0 점이라고 적어두면 진짜 0 점인지
-        // 아직 모르는 것인지 구분이 안 됩니다.
+        // 가운데 — 점수판. 서버가 계산해서 준 값입니다(scores).
+        // 프론트가 세면 두 사람 화면의 숫자가 갈라집니다.
         '<div class="nb-mid">' +
-          '<span class="nb-vs">VS</span>' +
+          (s.scores && s.side
+            ? '<span class="nb-score">' +
+                '<b>' + s.scores[s.side] + '</b>' +
+                '<i>:</i>' +
+                '<b>' + s.scores[s.side === 'host' ? 'guest' : 'host'] + '</b>' +
+              '</span>'
+            : '<span class="nb-vs">VS</span>') +
           '<span class="nb-room">' + esc(s.room || '') + '</span>' +
         '</div>' +
         (s.foe ? side(s.foe, '상대', 'is-foe') : '');
