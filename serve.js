@@ -3,7 +3,7 @@
 //
 // index.html 을 웹에서 볼 수 있게 띄워주는 아주 작은 서버입니다.
 // 의존성(npm install) 없이 Node 기본 기능만 씁니다.
-// 실행:  node serve.js   →  브라우저에서 http://100.115.173.118:10000
+// 실행:  node serve.js   →  브라우저에서 http://localhost:10000
 // ─────────────────────────────────────────────────────────────
 const http = require("http");
 const fs = require("fs");
@@ -51,5 +51,5 @@ const server = http.createServer((req, res) => {
 
 server.listen(PORT, HOST, () => {
   console.log(`프론트엔드 실행됨 → http://${HOST}:${PORT}`);
-  console.log(`테일스케일로 접속: http://100.115.173.118:${PORT}`);
+  console.log(`테일스케일로 접속: http://<이 컴퓨터의 테일스케일 IP>:${PORT}`);
 });
