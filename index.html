@@ -94,6 +94,7 @@
 <script src="game/sfx.js"></script>
 <script src="game/board.js"></script>
 <script src="game/rack.js"></script>
+<script src="game/play.js"></script>
 <script src="game/guide.js"></script>
 
 <script>
@@ -145,6 +146,12 @@
       rack: null,      // 내 칩 7개 (백엔드가 나에게만 보낸 것)
       foeTiles: 0,     // 상대가 든 칩 "개수". 무엇인지는 오지 않습니다
       bag: null,       // 가방에 남은 칩 개수
+      board: null,     // 판 전체 15×15. 언제나 서버가 준 것입니다
+      myTurn: false,   // 내 차례인가. 닉네임 비교로 정하면 안 됩니다
+      submitting: false,
+      confirming: false, // 제출하기를 눌러 확정을 기다리는 중
+      moveNote: null,  // 제출 결과 (사전에 없는 단어 등)
+      moveBad: false,
     };
 
     function blank() {
@@ -204,8 +211,11 @@
       if (s.playing) s.note = why || '연결이 끊겨 게임이 끝났습니다';
       s.playing = false; s.starting = false; s.startError = null; s.turn = null;
       // 게임판과 칩을 걷어냅니다. 다음 게임은 빈 판·새 칩으로 시작합니다.
+      if (play) { play.stop(); play = null; }
       if (board) board = board.destroy();
       if (rack) rack = rack.destroy();
+      s.board = null; s.myTurn = false; s.submitting = false;
+      s.moveNote = null; s.moveBad = false;
       s.rack = null; s.foeTiles = 0; s.bag = null;
       gameBuilt = false;
     }
@@ -574,9 +584,89 @@
         return true;
       }
 
+      // 판이 바뀌었습니다. 놓은 사람에게도 옵니다 — 자기 화면을 자기가
+      // 그리지 말고 서버가 준 판을 그리라는 것이 명세의 규칙입니다.
+      if (msg.type === 'board_updated') {
+        s.board = msg.board || s.board;
+        s.turn = msg.turn || null;
+        s.myTurn = !!msg.your_turn;
+        s.submitting = false;
+        s.confirming = false;
+        // 누가 칩을 놓으면 연속 넘기기 횟수가 0으로 되돌아갑니다(명세).
+        s.passes = 0;
+        s.passLeft = 3;
+        if (msg.scores) s.scores = msg.scores;
+        if (typeof msg.tiles_left === 'number') s.bag = msg.tiles_left;
+        if (typeof msg.partner_tile_count === 'number') s.foeTiles = msg.partner_tile_count;
+
+        var got = msg.score && msg.score.total;
+        s.moveNote = (msg.by || '') + ' → ' + (msg.words || []).join(', ') +
+                     (got != null ? '  ' + got + '점' : '') +
+                     (msg.score && msg.score.bingo ? ' (7개 다 씀 +' + msg.score.bingo + ')' : '');
+        s.moveBad = false;
+        if (play) play.accepted();
+        if (board) {
+          board.setBoard(s.board);
+          board.flash(msg.tiles);
+        }
+        Sfx.good();
+        // 내 차례가 되었으면 한 번 더 알려줍니다. 판만 바뀌면 상대가
+        // 둔 것을 보고도 내 차례인 줄 모르고 기다리게 됩니다.
+        if (s.myTurn) later(function () { Sfx.turn(); }, 420);
+        render();
+        return true;
+      }
+
+      // 제출 결과. 나에게만 옵니다.
+      if (msg.type === 'word_checked') {
+        s.submitting = false;
+        if (msg.placed) {
+          // 판에 올라갔습니다. 바로 뒤에 board_updated 가 오므로
+          // 여기서는 판을 건드리지 않습니다.
+          s.moveNote = null;
+          s.moveBad = false;
+          s.confirming = false;
+          // 쓴 칩이 빠지고 가방에서 채워진 새 손패입니다. 나에게만 옵니다.
+          if (msg.rack) {
+            s.rack = msg.rack;
+            if (rack) {
+              rack.show(msg.rack);
+              // 새로 뽑은 칩이 있으면 그만큼 소리를 내줍니다.
+              (msg.drawn || []).forEach(function (_, i) {
+                later(function () { Sfx.clack(i); }, 620 + i * 110);
+              });
+            }
+            if (play) play.accepted();
+          }
+          if (typeof msg.tiles_left === 'number') s.bag = msg.tiles_left;
+        } else {
+          // 사전에 없는 단어입니다. 아무것도 놓이지 않았고 차례도
+          // 그대로 나에게 있습니다. 올려둔 칩은 그대로 두어 고칠 수
+          // 있게 합니다.
+          var bad = (msg.words || []).filter(function (w) { return !w.valid; })
+                      .map(function (w) { return w.word; });
+          s.moveNote = msg.reason ||
+            (bad.length ? bad.join(', ') + ' — 사전에 없는 단어예요' : '놓지 못했어요');
+          s.moveBad = true;
+          Sfx.nope();
+        }
+        render();
+        return true;
+      }
+
       // 시작을 요청해두고 기다리는 중에 오는 error 는 그 요청에 대한
       // 답입니다. 명세대로 연결은 끊기지 않으므로 방에서 내보내지 않고
       // 이유만 보여줍니다. 다시 누를 수 있습니다.
+      // 제출한 수의 자리가 규칙에 안 맞을 때. 연결은 끊기지 않습니다.
+      if (msg.type === 'error' && s.submitting) {
+        s.submitting = false;
+        s.moveNote = msg.message;
+        s.moveBad = true;
+        Sfx.nope();
+        render();
+        return true;
+      }
+
       if (msg.type === 'error' && s.starting) {
         s.starting = false;
         s.startError = msg.message;
@@ -1323,6 +1413,7 @@
     var gameBuilt = false;   // 게임 화면의 뼈대를 이미 만들었는지
     var board = null;        // 게임판 모듈
     var rack = null;         // 칩 받침대 모듈
+    var play = null;         // 끌어다 놓기
 
     // ── 칩 점수표 받아오기 (HTTP, 한 번만) ──────────────
     // 칩에 어떤 글자가 몇 점인지는 게임의 고정된 규칙이고, 백엔드가
@@ -1367,8 +1458,7 @@
             '<div id="foesBox"></div>' +
             '<div id="boardBox"></div>' +
             '<div id="rackBox"></div>' +
-            '<p class="hint is-mid">아직 글자를 놓을 수 없습니다 — ' +
-              '놓는 규칙이 백엔드와 정해지면 열립니다</p>' +
+            '<div id="moveBox"></div>' +
             '<div class="stage-foot">' +
               '<button class="btn-cancel" id="toLobby" type="button">대기실 보기</button>' +
               '<button class="snd" id="sndBtn" type="button" aria-pressed="true">' +
@@ -1388,18 +1478,146 @@
         });
 
         board = Board.mount('#boardBox');
+        board.setPoints(tilePoints);
+        board.setBoard(s.board);
 
         rack = Rack.mount('#rackBox', { points: tilePoints });
         // 뼈대가 만들어진 바로 그때 칩을 나눠줍니다. 한 장씩 놓이며
         // 소리가 납니다.
         rack.deal(s.rack);
 
+        play = Play.start({
+          board: board,
+          rack: rack,
+          // 내 차례가 아니면 칩을 집을 수 없습니다. 집게 해두면 다
+          // 늘어놓은 뒤에야 거절당합니다.
+          canPlay: function () { return s.myTurn && !s.submitting; },
+          onBlank: askBlank,
+          onChange: renderMove
+        });
+
         gameBuilt = true;
       }
 
       renderFoes();
+      renderMove();
       // 매번 바뀌는 것만 다시 씁니다.
       renderNameBar();
+    }
+
+    // ── 제출 줄 ────────────────────────────────────────
+    // 칩을 올려두고 "놓기"를 누르는 자리입니다. 받침대 바로 아래에
+    // 두어 칩 → 판 → 놓기 가 한 줄기로 읽히게 합니다.
+    function renderMove() {
+      var box = $('moveBox');
+      if (!box) return;
+
+      var draft = play ? play.draft() : [];
+      var word = draft.map(function (t) { return t.letter; }).join('');
+
+      box.innerHTML =
+        '<div class="move">' +
+          '<span class="move-say" id="moveSay"></span>' +
+          '<button class="btn-cancel" id="undoBtn" type="button">되돌리기</button>' +
+          '<button class="btn-put" id="putBtn" type="button">놓기</button>' +
+        '</div>';
+
+      var say = $('moveSay'), undo = $('undoBtn'), put = $('putBtn');
+
+      undo.disabled = !draft.length || s.submitting;
+      // 명세: 한 번에 1~7개. 한 개만 놓아도 이미 놓인 글자에 붙어
+      // 단어가 되면 인정됩니다.
+      put.disabled = !s.myTurn || s.submitting || draft.length < 1;
+      put.textContent = s.submitting ? '확인 중…' : '놓기';
+
+      if (s.moveNote) {
+        say.className = 'move-say' + (s.moveBad ? ' is-bad' : ' is-ok');
+        say.textContent = s.moveNote;
+      } else if (!s.myTurn) {
+        say.className = 'move-say';
+        say.textContent = (s.foe || '상대') + ' 님 차례를 기다리는 중…';
+      } else if (draft.length) {
+        say.className = 'move-say';
+        say.textContent = word + ' — ' + draft.length + '개 올려둠';
+      } else {
+        say.className = 'move-say';
+        say.textContent = '칩을 끌어다 판에 놓으세요';
+      }
+
+      undo.addEventListener('click', function () {
+        s.moveNote = null; s.moveBad = false;
+        play.clear();
+        render();
+      });
+      put.addEventListener('click', submitMove);
+    }
+
+    // 놓은 칩들의 좌표를 보냅니다. 완성된 단어가 아니라 좌표를
+    // 보내는 이유는 명세에 적혀 있습니다 — 점수가 어느 칸에 놓였는지에
+    // 따라 달라지고, 판에 실제로 놓으려면 자리도 알아야 합니다.
+    function submitMove() {
+      var draft = play ? play.draft() : [];
+      if (!draft.length || !s.myTurn || s.submitting) return;
+      s.confirming = false;
+      if (!roomSock || roomSock.readyState !== 1) {
+        s.moveNote = '연결이 없어 보내지 못했어요'; s.moveBad = true;
+        render(); return;
+      }
+
+      s.submitting = true;
+      s.moveNote = null; s.moveBad = false;
+      render();
+
+      roomSock.send(JSON.stringify({
+        type: 'submit',
+        tiles: draft.map(function (t) {
+          return { row: t.row, col: t.col, letter: t.letter };
+        })
+      }));
+
+      later(function () {
+        if (!s.submitting) return;
+        s.submitting = false;
+        s.moveNote = '백엔드가 대답하지 않았어요. 다시 눌러주세요';
+        s.moveBad = true;
+        render();
+      }, 6000);
+    }
+
+    // ── 빈 칩의 글자 고르기 ────────────────────────────
+    // 빈 칩(?)은 무슨 글자로 쓸지 정해야 합니다. ? 인 채로는 무슨
+    // 단어인지 판단할 수 없어서 서버가 받아주지 않습니다(명세).
+    function askBlank(done) {
+      var veil = document.createElement('div');
+      veil.className = 'guide-veil';
+      var box = document.createElement('div');
+      box.className = 'blank-pick';
+      box.innerHTML =
+        '<p class="blank-say">빈 칩을 무슨 글자로 쓸까요?</p>' +
+        '<div class="blank-grid">' +
+          'ABCDEFGHIJKLMNOPQRSTUVWXYZ'.split('').map(function (c) {
+            return '<button class="blank-b" type="button" data-c="' + c + '">' + c + '</button>';
+          }).join('') +
+        '</div>' +
+        '<button class="btn-cancel" data-c="" type="button">그만두기</button>';
+      veil.appendChild(box);
+      document.body.appendChild(veil);
+
+      function pick(c) {
+        document.body.removeChild(veil);
+        document.removeEventListener('keydown', onKey);
+        done(c || null);
+      }
+      function onKey(e) {
+        if (e.key === 'Escape') return pick(null);
+        if (/^[a-zA-Z]$/.test(e.key)) pick(e.key.toUpperCase());
+      }
+      veil.addEventListener('click', function (e) {
+        var t = e.target.closest('[data-c]');
+        if (t) return pick(t.dataset.c);
+        if (e.target === veil) pick(null);
+      });
+      document.addEventListener('keydown', onKey);
     }
 
     // ── 상대 칩 + 가방 (판 위 얇은 줄) ─────────────────

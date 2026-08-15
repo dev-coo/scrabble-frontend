@@ -11,10 +11,16 @@
      판.destroy();
 
    ── 이 파일이 하지 않는 일 ───────────────────────────────
-   서버를 부르지 않습니다. 지금은 빈 판을 그리는 것까지만 합니다.
-   글자를 놓는 일은 백엔드와 주고받을 규칙(계약)이 정해진 뒤에
-   붙입니다. 규칙 없이 먼저 만들면, 나중에 정해진 규칙이 조금만
-   달라도 전부 뜯어고쳐야 합니다.
+   서버를 부르지 않습니다. 받은 것을 그리기만 합니다.
+
+   판에 놓인 글자는 **언제나 서버가 준 것**입니다(명세). 내가 방금
+   놓은 글자도 내가 그리지 않고, board_updated 로 되돌아온 판을
+   그립니다. 자기 화면을 자기가 그리기 시작하면 두 사람이 서로 다른
+   판을 보게 되고, 그때 어느 쪽이 맞는지 판단할 방법이 없습니다.
+
+   아직 제출하지 않은 내 칩(초안)만 예외입니다. 그건 서버가 모르는
+   것이라 이쪽에서 그리고, 제출해서 판에 올라가면 서버가 준 판으로
+   바뀝니다.
    ───────────────────────────────────────────────────────────── */
 window.Board = (function () {
   'use strict';
@@ -117,7 +123,118 @@ window.Board = (function () {
     wrap.appendChild(frame);
     host.appendChild(wrap);
 
+    // 칸 하나를 좌표로 찾습니다.
+    // 이름을 sqAt 으로 둔 이유: 위 반복문 안에 `var at = 'A1'…` 이
+    // 있는데, var 는 함수 전체에 걸치는 이름이라 at 이라고 지으면
+    // 그 문자열이 이 함수를 덮어씁니다.
+    function sqAt(r, c) { return grid.children[r * 15 + c]; }
+
+    // 칸에 글자를 올리거나 내립니다.
+    //   kind : 'fixed' 서버가 준 글자(못 움직임)
+    //          'draft' 아직 제출 안 한 내 칩(움직일 수 있음)
+    //          null    비우기
+    function put(sq, letter, kind, points, blank) {
+      var old = sq.querySelector('.sq-chip');
+      if (old) sq.removeChild(old);
+      sq.classList.toggle('has-chip', !!letter);
+      sq.classList.toggle('is-draft', kind === 'draft');
+      if (!letter) return null;
+
+      var c = document.createElement('div');
+      c.className = 'chip sq-chip' + (kind === 'draft' ? ' is-draft' : '') +
+                    (blank ? ' is-was-blank' : '');
+      c.textContent = letter;
+      // 빈 칩은 무슨 글자로 쓰든 0점입니다. 그 글자의 점수를 찍으면
+      // 없는 점수를 벌어들인 것처럼 보입니다.
+      var pt = blank ? null : (points && points[letter]);
+      if (pt != null) {
+        var pip = document.createElement('i');
+        pip.className = 'chip-pip';
+        pip.textContent = pt;
+        c.appendChild(pip);
+      }
+      sq.appendChild(c);
+      return c;
+    }
+
+    var fixed = null;   // 서버가 마지막으로 준 판
+    var points = null;
+
     return {
+      /* 글자별 점수표. 칩에 찍히는 숫자입니다. */
+      setPoints: function (p) { points = p; return this; },
+
+      /* 서버가 준 판 전체를 그립니다. 15줄 × 15칸, 빈 칸은 "".
+         바뀐 부분만 받지 않고 통째로 받는 이유는 명세에 적혀 있습니다 —
+         조각을 모아 맞추다 한 번이라도 놓치면 그 뒤로 계속 어긋납니다. */
+      setBoard: function (rows) {
+        fixed = rows || null;
+        for (var r = 0; r < 15; r++) {
+          for (var c = 0; c < 15; c++) {
+            var ch = rows && rows[r] && rows[r][c] ? rows[r][c] : '';
+            put(sqAt(r, c), ch, ch ? 'fixed' : null, points);
+          }
+        }
+        return this;
+      },
+
+      /* 아직 제출하지 않은 내 칩들. [{row, col, letter}] */
+      setDraft: function (list) {
+        // 먼저 지난번 초안을 걷어냅니다. 서버가 준 글자는 건드리지
+        // 않습니다.
+        [].forEach.call(grid.querySelectorAll('.sq.is-draft'), function (sq) {
+          put(sq, '', null, points);
+        });
+        (list || []).forEach(function (t) {
+          var sq = sqAt(t.row, t.col);
+          if (sq) put(sq, t.letter, 'draft', points, t.blank);
+        });
+        return this;
+      },
+
+      /* 방금 놓인 자리를 잠깐 반짝이게 합니다. */
+      flash: function (list) {
+        (list || []).forEach(function (t) {
+          var sq = sqAt(t.row, t.col);
+          if (!sq) return;
+          sq.classList.remove('is-new');
+          // 클래스를 다시 붙이려면 브라우저가 한 번 갱신해야 합니다.
+          void sq.offsetWidth;
+          sq.classList.add('is-new');
+        });
+        return this;
+      },
+
+      /* 그 칸이 비어 있는지. 서버 글자도 초안도 없어야 빈 칸입니다. */
+      isEmpty: function (r, c) {
+        if (r < 0 || r > 14 || c < 0 || c > 14) return false;
+        if (fixed && fixed[r] && fixed[r][c]) return false;
+        var sq = sqAt(r, c);
+        return !!sq && !sq.classList.contains('has-chip');
+      },
+
+      /* 화면 위 한 점이 어느 칸인지. 끌어다 놓을 때 씁니다. */
+      cellAtPoint: function (x, y) {
+        var e = document.elementFromPoint(x, y);
+        var sq = e && e.closest ? e.closest('.sq') : null;
+        if (!sq || !grid.contains(sq)) return null;
+        var i = [].indexOf.call(grid.children, sq);
+        if (i < 0) return null;
+        return { row: Math.floor(i / 15), col: i % 15, el: sq };
+      },
+
+      /* 어느 칸에 손이 올라가 있는지 표시합니다. */
+      hover: function (cell) {
+        [].forEach.call(grid.querySelectorAll('.sq.is-over'), function (s) {
+          s.classList.remove('is-over', 'is-no');
+        });
+        if (!cell) return this;
+        cell.el.classList.add('is-over');
+        if (!this.isEmpty(cell.row, cell.col)) cell.el.classList.add('is-no');
+        return this;
+      },
+
+      grid: grid,
       /* 화면에서 통째로 떼어냅니다. 채팅 모듈과 같은 방식이라
          var 판 = 판.destroy(); 로 쓰면 변수까지 함께 비워집니다. */
       destroy: function () {
