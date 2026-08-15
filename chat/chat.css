@@ -243,7 +243,17 @@
 .chat-dock{
   position:fixed; right:20px; bottom:20px; z-index:60;
   display:flex; flex-direction:column; align-items:flex-end; gap:12px;
+  /* 이 칸 자체는 눌림을 받지 않습니다. 안에 든 창과 동그란 버튼만
+     받습니다.
+
+     왜 필요한가: 좁은 화면에서 이 칸은 가로 전체로 넓어지는데(아래
+     640px 규칙), 정작 보이는 것은 오른쪽 끝 동그라미 하나뿐입니다.
+     그대로 두면 아무것도 안 보이는 왼쪽 빈 자리가 눌림을 가로채서,
+     그 아래 있는 버튼이 눌리지 않습니다. 실제로 휴대폰 크기에서
+     게임 시작 버튼이 이것 때문에 눌리지 않았습니다. */
+  pointer-events:none;
 }
+.chat-dock > *{ pointer-events:auto }
 
 /* 창은 버튼 위에 뜹니다. 닫혀 있으면 아예 없습니다. */
 .chat-dock .chat{

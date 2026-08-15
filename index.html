@@ -27,7 +27,10 @@
 
 <div class="board">
 
-  <div class="lobby">
+  <div class="lobby" id="lobbyView">
+
+    <!-- 단계와 상관없이 알릴 일이 있을 때만 채워집니다. -->
+    <div id="noteBox"></div>
 
     <div class="crown">
       <div class="tiles" aria-hidden="true">
@@ -63,8 +66,19 @@
 
   </div>
 
+  <!--
+    게임 화면 (/game).
+
+    별도의 파일로 만들지 않았습니다. 페이지를 새로 불러오면 웹소켓이
+    끊기고, 끊기면 방도 같이 사라지기 때문입니다(명세). 그래서 주소만
+    /game 으로 바꾸고 연결은 그대로 둔 채 이 칸으로 갈아끼웁니다.
+    주소창에는 똑같이 /game 이 찍히고 뒤로가기도 됩니다.
+  -->
+  <div class="stage" id="gameView" hidden></div>
+
   <!-- 채팅이 붙는 자리. 안에 들어갈 것은 chat/chat.js 가 만듭니다.
-       떠 있는 모드라 이 자리가 어디든 화면 오른쪽 아래에 나타납니다. -->
+       떠 있는 모드라 이 자리가 어디든 화면 오른쪽 아래에 나타납니다.
+       대기실과 게임 화면 밖에 있어서 넘어가도 대화가 그대로 남습니다. -->
   <div id="chatBox"></div>
 
 </div>
@@ -105,12 +119,18 @@
       role: null,      // 'host'(방을 만든 쪽) | 'guest'(코드로 들어간 쪽)
       phase: null,     // 'making' | 'hosting' | 'hunting'
       queue: null,     // 랜덤 매칭에서 줄 선 자리
-      roomError: null  // 방 만들기·입장·매칭이 실패한 이유
+      roomError: null, // 방 만들기·입장·매칭이 실패한 이유
+      playing: false,  // 게임이 시작됐는지 (백엔드가 알려준 것)
+      starting: false, // 시작을 요청해두고 대답을 기다리는 중
+      startError: null,// 시작하지 못한 이유
+      turn: null,      // 먼저 두는 사람의 닉네임 (백엔드가 정합니다)
+      note: null       // 단계와 상관없이 맨 위에 알릴 말
     };
 
     function blank() {
       return { nick: null, playerId: null, mode: null, room: null, foe: null,
-               role: null, phase: null, queue: null, roomError: null };
+               role: null, phase: null, queue: null, roomError: null,
+               playing: false, starting: false, startError: null, turn: null, note: null };
     }
 
     var timers = [];
@@ -146,8 +166,20 @@
       roomSock = null;
     }
 
+    // 연결이 끊기면 게임도 함께 끝납니다. 게임 상태는 백엔드가 들고
+    // 있고, 이 연결이 곧 그 게임이기 때문입니다. 다시 이어붙이는
+    // 방법(재접속)은 아직 계약에 없습니다.
+    function endGame(why) {
+      // 게임 화면을 보고 있다가 갑자기 대기실로 돌아오면 무슨 일이
+      // 벌어진 건지 알 수 없습니다. 그래서 맨 위에 이유를 남깁니다.
+      if (s.playing) s.note = why || '연결이 끊겨 게임이 끝났습니다';
+      s.playing = false; s.starting = false; s.startError = null; s.turn = null;
+      chatShown = false;   // 다음 게임에서는 다시 한 번 펼칩니다
+    }
+
     function failRoom(why) {
       dropRoomSocket();
+      endGame();
       s.room = null;
       s.phase = null;
       s.roomError = why;
@@ -174,6 +206,7 @@
         try { msg = JSON.parse(ev.data); } catch (e) { return; }
 
         if (handleChat(msg)) return;
+        if (handleGame(msg)) return;
 
         if (msg.type === 'room_created') {
           // 백엔드가 준 모양: { type, code, name, host_nickname, max_players }
@@ -197,6 +230,11 @@
         // 친구가 나가면 자리가 다시 빕니다. 방은 그대로 살아 있어서
         // 같은 코드로 다른 사람이 들어올 수 있습니다.
         if (msg.type === 'guest_left') {
+          // 게임 중이었다면 게임도 여기서 끝납니다. 혼자서는 둘 수 없고,
+          // 방은 그대로 살아 있어서 같은 코드로 다른 사람이 들어올 수 있습니다.
+          // 닉네임은 renderNote 가 그릴 때 한 번 걸러줍니다. 여기서 또
+          // 거르면 <나> 같은 이름이 &lt;나&gt; 로 두 번 바뀌어 보입니다.
+          endGame((msg.nickname || '상대') + ' 님이 나가 게임이 끝났습니다');
           s.foe = null;
           s.phase = 'hosting';
           render();
@@ -251,6 +289,7 @@
         try { msg = JSON.parse(ev.data); } catch (e) { return; }
 
         if (handleChat(msg)) return;
+        if (handleGame(msg)) return;
 
         if (msg.type === 'joined') {
           // 백엔드가 준 모양: { type, code, host_nickname, guest_nickname }
@@ -330,6 +369,7 @@
         try { msg = JSON.parse(ev.data); } catch (e) { return; }
 
         if (handleChat(msg)) return;
+        if (handleGame(msg)) return;
 
         // 줄을 섰습니다. 기다리는 사람이 없다는 뜻입니다.
         if (msg.type === 'waiting') {
@@ -356,6 +396,8 @@
         // waiting 이나 matched 가 이어서 옵니다.
         if (msg.type === 'partner_left') {
           var gone = msg.nickname;
+          // 게임 중이었다면 여기서 끝납니다. 새 짝과는 새 게임입니다.
+          endGame((gone || '상대') + ' 님이 나가 게임이 끝났습니다');
           s.foe = null;
           s.room = null;
           s.phase = 'hunting';
@@ -385,6 +427,7 @@
     // 매칭을 그만둡니다. 연결을 끊으면 줄에서도 빠집니다.
     function stopMatch(why) {
       dropRoomSocket();
+      endGame();
       s.room = null; s.foe = null; s.phase = null; s.queue = null;
       s.roomError = why || null;
       render();
@@ -393,18 +436,139 @@
     // 방에서 빠져나올 때 화면을 되돌립니다.
     function leaveRoom(why) {
       dropRoomSocket();
+      endGame();
       s.room = null; s.foe = null; s.role = null; s.phase = null;
       s.roomError = why;
       render();
     }
 
+    // ── 주소 (/ 와 /game) ───────────────────────────────
+    // 페이지를 새로 불러오지 않고 주소만 바꿉니다. 새로 불러오면
+    // 웹소켓이 끊기고, 끊기면 방도 같이 사라집니다(명세). 게임 중에
+    // 연결이 끊기면 게임 자체가 없어지는 셈이라 그럴 수 없습니다.
+    //
+    // pushState = "주소창의 글자와 뒤로가기 기록만 바꾸기". 서버에는
+    // 아무것도 물어보지 않습니다.
+    function goTo(path) {
+      if (location.pathname !== path) history.pushState({ at: path }, '', path);
+      render();
+    }
+
+    // 뒤로가기·앞으로가기를 누르면 주소가 바뀌므로 다시 그립니다.
+    // 연결은 건드리지 않습니다 — 화면만 오갈 뿐입니다.
+    window.addEventListener('popstate', function () { render(); });
+
+    function onGameScreen() { return s.playing && location.pathname === '/game'; }
+
+    // ── 게임 시작 ───────────────────────────────────────
+    // 방을 만들 때 쓰던 그 연결을 그대로 씁니다. 채팅과 같은 통로입니다.
+    //
+    // 명세(/asyncapi.json)에 적힌 형식입니다:
+    //   보낼 때  { type: "start" }            ← 방장만 보낼 수 있습니다
+    //   받을 때  { type: "game_started", code, host_nickname,
+    //             guest_nickname, first_turn, at }
+    //
+    // 먼저 두는 사람(first_turn)은 백엔드가 무작위로 정합니다. 스크래블에서
+    // 선공은 유리한 자리라, 방을 만들었다는 이유로 먼저 두면 불공평합니다.
+    function startGame() {
+      if (!roomSock || roomSock.readyState !== 1) {
+        s.startError = '연결이 없어 시작하지 못했어요';
+        render();
+        return;
+      }
+
+      s.starting = true;
+      s.startError = null;
+      render();
+
+      roomSock.send(JSON.stringify({ type: 'start' }));
+
+      // 대답이 아예 안 올 수도 있습니다. 그대로 두면 화면이
+      // "시작하는 중…"에서 영영 멈춥니다. 답이 없는 것도 하나의
+      // 결과이므로 시간을 재두고, 지나면 다시 누를 수 있게 돌려놓습니다.
+      later(function () {
+        if (!s.starting) return;
+        s.starting = false;
+        s.startError = '백엔드가 대답하지 않았어요. 잠시 뒤 다시 눌러주세요';
+        render();
+      }, 5000);
+    }
+
+    // 방 통로로 들어온 메시지 중 게임 시작에 해당하는 것을 처리합니다.
+    // 방 만들기·입장·랜덤 매칭 세 통로가 똑같이 씁니다.
+    function handleGame(msg) {
+      if (msg.type === 'game_started') {
+        s.playing = true;
+        s.starting = false;
+        s.startError = null;
+        s.turn = msg.first_turn || null;
+        if (msg.code) s.room = msg.code;
+        // 여기서 render() 를 부르지 않는 이유: 다시 그리면 뒤집히던
+        // 타일이 통째로 새로 만들어져 연출이 사라집니다. 문이 다 열린
+        // 다음에 goTo 가 화면을 바꾸면서 그때 한 번만 그립니다.
+        openGate();
+        later(function () { goTo('/game'); }, GATE_MS);
+        return true;
+      }
+
+      // 시작을 요청해두고 기다리는 중에 오는 error 는 그 요청에 대한
+      // 답입니다. 명세대로 연결은 끊기지 않으므로 방에서 내보내지 않고
+      // 이유만 보여줍니다. 다시 누를 수 있습니다.
+      if (msg.type === 'error' && s.starting) {
+        s.starting = false;
+        s.startError = msg.message;
+        render();
+        return true;
+      }
+
+      return false;
+    }
+
+    // 타일이 다 뒤집히고 대기실이 사라지기까지 걸리는 시간.
+    // CSS 의 지연(0.4초) + 뒤집기(0.5초) + 대기실이 떠오르는 시간과 맞춥니다.
+    var GATE_MS = 1150;
+
+    function openGate() {
+      var g = $('startGame');
+      if (g) g.className = 'gate is-going';
+      var lobby = $('lobbyView');
+      // 타일이 다 뒤집힌 다음에 대기실을 걷어냅니다.
+      later(function () { if (lobby) lobby.className = 'lobby is-opening'; }, 900);
+    }
+
     // ── 그리기 ──────────────────────────────────────────
     function render() {
+      // 게임이 끝났거나(연결이 끊겼거나) 시작된 적이 없는데 주소만
+      // /game 이면 주소를 되돌립니다. 주소와 화면이 다른 말을 하면
+      // 새로고침하거나 링크를 공유했을 때 없는 화면으로 들어가게 됩니다.
+      // replaceState 는 뒤로가기 기록을 남기지 않습니다 — 없던 화면이라
+      // 뒤로 갈 곳도 아니기 때문입니다.
+      if (!s.playing && location.pathname === '/game') {
+        history.replaceState({ at: '/' }, '', '/');
+      }
+
+      var playing = onGameScreen();
+
+      // 대기실과 게임 화면은 둘 중 하나만 보입니다.
+      // 지우지 않고 감추는 이유: 게임에서 대기실로 돌아왔을 때
+      // 입력하던 것이 그대로 남아 있어야 하기 때문입니다.
+      $('lobbyView').hidden = playing;
+      $('gameView').hidden = !playing;
+      if (!playing) $('lobbyView').className = 'lobby';
+
+      renderNote();
       renderStepper();
       renderStep1();
       renderStep2();
       renderStep3();
+      renderGame();
       syncChat();
+    }
+
+    function renderNote() {
+      $('noteBox').innerHTML = s.note
+        ? '<p class="note"><span class="note-icon">!</span>' + esc(s.note) + '</p>'
+        : '';
     }
 
     // ── 채팅 ────────────────────────────────────────────
@@ -412,12 +576,13 @@
     // 쓰게 됩니다. 여기서 정하는 것은 "언제 붙이고 언제 떼는지"뿐입니다.
     var chat = null;
     var chatFoe = null;   // 채팅에 이미 알린 상대
+    var chatShown = false; // 이번 게임에서 채팅을 이미 펼쳤는지
 
     function syncChat() {
       // 닉네임이 정해지기 전에는 띄우지 않습니다.
       // 누가 한 말인지 가를 기준이 아직 없기 때문입니다.
       if (!s.nick) {
-        if (chat) { chat = chat.destroy(); chatFoe = null; }
+        if (chat) { chat = chat.destroy(); chatFoe = null; chatShown = false; }
         return;
       }
 
@@ -445,6 +610,14 @@
         chat.system('방에 들어가면 이야기할 수 있어요');
       }
 
+      // 게임 화면에 들어오면 한 번 펼칩니다. 게임판이 아직 없어서
+      // 여기서는 이야기하는 것이 곧 할 일이고, 가릴 버튼도 없습니다.
+      // 사용자가 직접 닫았다면 다시 열지 않습니다.
+      if (onGameScreen() && !chatShown) {
+        chatShown = true;
+        chat.open();
+      }
+
       // 둘이 모였는지에 따라 채팅을 열고 닫습니다.
       if (s.foe && s.foe !== chatFoe) {
         chatFoe = s.foe;
@@ -452,10 +625,13 @@
         chat.system(s.role === 'guest'
           ? s.foe + ' 님의 방에 들어왔습니다'
           : s.foe + ' 님이 들어왔습니다');
-        // 상대가 정해지는 순간 창을 펼칩니다. 여기까지 왔다는 건 이제
-        // 할 일이 이야기하는 것뿐이라는 뜻인데, 버튼만 떠 있으면
-        // 채팅이 열린 줄 모르고 지나칩니다.
-        chat.open();
+        // 예전에는 여기서 바로 펼쳤습니다. 그때는 상대가 정해지면 할 일이
+        // 이야기하는 것뿐이었기 때문입니다.
+        //
+        // 지금은 다릅니다 — 상대가 오면 방장은 게임 시작 버튼을 눌러야
+        // 하는데, 좁은 화면(휴대폰)에서는 펼쳐진 채팅이 그 버튼을 통째로
+        // 덮어 누를 수가 없습니다. 그래서 대기실에서는 접어두고, 말이 오면
+        // 동그란 버튼에 숫자만 붙입니다.
       } else if (!s.foe && chatFoe) {
         chat.system(chatFoe + ' 님과의 연결이 끝났습니다');
         chat.setStatus('offline');
@@ -486,7 +662,8 @@
 
     function renderStepper() {
       var pips = $('stepper').children;
-      var at = s.nick ? (s.foe ? 2 : 1) : 0;
+      // 게임이 시작되면 세 칸이 모두 끝난 상태가 됩니다.
+      var at = !s.nick ? 0 : !s.foe ? 1 : s.playing ? 3 : 2;
       for (var i = 0; i < 3; i++) {
         pips[i].className = 'pip' + (i < at ? ' is-done' : i === at ? ' is-now' : '');
       }
@@ -710,6 +887,8 @@
           dropRoomSocket();
           s.mode = input.value; s.room = null; s.foe = null; s.role = null;
           s.phase = null; s.queue = null; s.roomError = null;
+          s.playing = false; s.starting = false; s.startError = null; s.turn = null;
+          s.note = null;   // 다른 것을 고르면 지난 알림은 지웁니다
           render();
         });
       });
@@ -985,15 +1164,106 @@
         return;
       }
 
-      // 원래 디자인은 여기서 게임 화면으로 저절로 넘어갔습니다.
-      // 그 화면을 아직 안 만들었으므로 넘어가는 척하지 않습니다.
+      // 이미 시작해 놓고 뒤로가기로 대기실에 와 있는 경우.
+      // 게임은 그대로 돌아가고 있으므로 돌아갈 길만 열어둡니다.
+      if (s.playing) {
+        body.innerHTML =
+          '<div class="leaving">' +
+            '<p class="hint is-ok is-mid"><span class="hint-icon">✓</span> 게임이 진행 중입니다</p>' +
+            '<button class="btn-wide" id="backToGame" type="button" style="margin-top:12px">게임 화면으로</button>' +
+          '</div>';
+        $('backToGame').addEventListener('click', function () { goTo('/game'); });
+        return;
+      }
+
+      // 시작할 수 있는 사람인가.
+      //   친구 모드 — 방을 만든 쪽(host)만 시작합니다.
+      //   랜덤 매칭 — 누가 방장인지 프론트가 알 수 없습니다. matched 메시지에
+      //               그 정보가 없기 때문입니다. 그래서 둘 다에게 보여주고,
+      //               방장이 아니면 백엔드가 거절하기를 기대합니다.
+      //               (docs/backend-requests.md 에 개선 요청을 적어뒀습니다)
+      var canStart = s.mode === 'random' || s.role === 'host';
+
+      if (!canStart) {
+        // 눌리지 않는 버튼을 보여주는 대신 아예 다른 것을 보여줍니다.
+        // 잠긴 버튼은 고장 난 것처럼 보이고, 왜 안 되는지도 안 알려줍니다.
+        body.innerHTML =
+          '<div class="await">' +
+            '<div class="await-tiles" aria-hidden="true">' +
+              '<div class="await-tile">대</div><div class="await-tile">기</div>' +
+              '<div class="await-tile">중</div><div class="await-tile">…</div>' +
+            '</div>' +
+            '<p class="hint is-mid">' + esc(s.foe) + ' 님이 시작하기를 기다리는 중이에요</p>' +
+          '</div>';
+        return;
+      }
+
+      // 방장 — 문을 엽니다.
+      var word = ['게', '임', '시', '작', '!'];
+      var pips = [2, 3, 1, 4, 5];   // 타일 구석의 점수. 장식입니다.
+
       body.innerHTML =
-        '<div class="leaving">' +
-          '<p class="hint is-ok is-mid"><span class="hint-icon">✓</span> ' +
-            esc(s.foe) + ' 님과 준비됐어요' +
-          '</p>' +
-          '<p class="hint is-mid">게임 화면은 아직 만들지 않았습니다</p>' +
+        '<button class="gate' + (s.starting ? ' is-waiting' : '') + '" id="startGame" ' +
+                'type="button"' + (s.starting ? ' disabled' : '') + '>' +
+          '<p class="gate-label">' + (s.starting ? '시작하는 중…' : '눌러서 시작') + '</p>' +
+          '<span class="gate-tiles">' +
+            word.map(function (ch, i) {
+              return '<span class="gate-tile">' +
+                       '<span class="gate-face gate-front">' + ch +
+                         '<i class="gate-pip">' + pips[i] + '</i></span>' +
+                       '<span class="gate-face gate-back">' + ch +
+                         '<i class="gate-pip">' + pips[i] + '</i></span>' +
+                     '</span>';
+            }).join('') +
+          '</span>' +
+        '</button>' +
+        // 실패했을 때는 백엔드가 한 말을 그대로 보여줍니다. 우리가 고쳐
+        // 쓰면 진짜 이유가 가려집니다. ("방장만 게임을 시작할 수 있습니다"
+        // 처럼 백엔드가 이미 사람이 읽을 수 있게 써 줍니다)
+        (s.startError
+          ? '<p class="hint is-bad"><span class="hint-icon">!</span>' + esc(s.startError) + '</p>'
+          : '<p class="hint is-mid">' + esc(s.foe) + ' 님과 함께 들어갑니다</p>');
+
+      if (!s.starting) $('startGame').addEventListener('click', startGame);
+    }
+
+    // ── 게임 화면 (/game) ──────────────────────────────
+    // 게임판은 아직 없습니다. 지금 이 화면이 하는 일은 "정말 시작됐다"와
+    // "누구 차례다"를 보여주는 것뿐입니다. 없는 것을 미리 그려두면 되는
+    // 것처럼 보이다가, 진짜 게임이 붙는 순간 조용히 어긋납니다.
+    function renderGame() {
+      if (!onGameScreen()) return;
+
+      var mine = s.turn && s.turn === s.nick;
+
+      $('gameView').innerHTML =
+        '<div class="stage-crown">' +
+          '<div class="tiles" aria-hidden="true">' +
+            'SCRABBLE'.split('').map(function (c) {
+              return '<div class="tile">' + c + '</div>';
+            }).join('') +
+          '</div>' +
+          '<h1>게임 · 방 ' + esc(s.room || '') + '</h1>' +
+        '</div>' +
+        '<div class="stage-body">' +
+          (s.turn
+            ? '<div class="turn' + (mine ? ' is-me' : '') + '">' +
+                '<span class="turn-tile">' + esc(s.turn.charAt(0)) + '</span>' +
+                (mine ? '<span><b>내 차례</b>입니다</span>'
+                      : '<span><b>' + esc(s.turn) + '</b> 님 차례입니다</span>') +
+              '</div>'
+            : '') +
+          versus(s.foe, 'found') +
+          '<p class="hint is-mid">게임판은 아직 만들지 않았습니다</p>' +
+          '<div class="stage-foot">' +
+            '<button class="btn-cancel" id="toLobby" type="button">대기실 보기</button>' +
+          '</div>' +
         '</div>';
+
+      // 화면만 대기실로 돌아갑니다. 백엔드에는 아무것도 알리지 않습니다 —
+      // "게임에서 나간다"는 계약이 아직 없기 때문입니다. 연결은 그대로라
+      // 게임도 그대로 살아 있고, 언제든 다시 들어올 수 있습니다.
+      $('toLobby').addEventListener('click', function () { goTo('/'); });
     }
 
     // ── 잡일 ───────────────────────────────────────────
@@ -1014,6 +1284,15 @@
     function mmss(t) {
       var m = Math.floor(t / 60), x = t % 60;
       return (m < 10 ? '0' + m : m) + ':' + (x < 10 ? '0' + x : x);
+    }
+
+    // ── 첫 화면 ────────────────────────────────────────
+    // 주소창에 /game 을 직접 치거나, 게임 중에 새로고침한 경우입니다.
+    // 웹소켓은 페이지가 살아 있는 동안만 유지되므로 새로 불러온 순간
+    // 이미 연결이 없습니다. 다시 이어붙이는 방법은 계약에 없으니
+    // 대기실로 되돌리고 왜 그런지 알립니다. (되돌리는 일은 render 가 합니다)
+    if (location.pathname === '/game') {
+      s.note = '게임 화면은 대기실에서 시작해야 열립니다 — 새로고침하면 연결이 끊겨 게임이 사라집니다';
     }
 
     render();

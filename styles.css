@@ -181,8 +181,141 @@ body{margin:0;padding:0;background:var(--paper);color:var(--ink);font-family:var
 @media (prefers-reduced-motion:reduce){.waiting,.player.is-hunting .player-tile{animation-duration:3s}.code-row.is-shake{animation:none}}
 
 /* ── ③ 시작 ──────────────────────────────────────────────
-   누르는 버튼이 없습니다. 상대가 정해지면 스스로 넘어갑니다.
-   그래서 이 칸은 "지금 무슨 일이 일어나는지"만 알려줍니다. */
+   상대가 정해져도 저절로 넘어가지 않습니다. 방장이 문을 열어야
+   시작됩니다. 그래서 이 칸은 상황에 따라 셋 중 하나가 됩니다.
+     · 방장       → 누를 수 있는 문
+     · 들어간 쪽  → 방장이 열기를 기다리는 안내
+     · 아직 혼자  → 잠긴 칸 */
 .leaving{padding:18px 14px;text-align:center;background:var(--ok-tint);border:1.5px solid var(--rule)}
 .leaving.is-idle{background:transparent;border-style:dashed;border-color:var(--grid)}
 .leaving .hint{margin:0}
+
+/* ── 게임 시작 — 타일 문 ─────────────────────────────────
+   여기는 대기실의 마지막 칸이자 게임으로 넘어가는 유일한 문입니다.
+   그래서 화면에서 제일 눈에 띄어야 합니다.
+
+   다만 요란한 색을 새로 칠하는 대신, 이 화면이 원래 쓰던 스크래블
+   타일을 그대로 크게 씁니다. 없던 것을 가져다 붙이면 이 화면만
+   따로 노는데, 원래 있던 것을 키우면 "쭉 오던 길의 끝"으로 읽힙니다. */
+.gate{display:block;width:100%;padding:20px 14px 18px;font:inherit;
+  background:var(--paper-2);border:1.5px solid var(--rule);cursor:pointer;
+  transition:background .3s ease,box-shadow .3s ease;-webkit-tap-highlight-color:transparent}
+.gate:disabled{cursor:default}
+.gate:focus-visible{outline:none;box-shadow:inset 0 0 0 3px var(--theme-deep)}
+
+.gate-label{margin:0 0 13px;font-family:var(--font-mono);font-size:10.5px;
+  letter-spacing:var(--track-caps);text-transform:uppercase;color:var(--ink-soft)}
+.gate-tiles{display:flex;justify-content:center}
+
+/* 타일 한 장 — 앞면(하늘색)과 뒷면(금색)이 등을 맞대고 붙어 있습니다.
+   perspective 는 "보는 사람의 눈 위치"입니다. 이게 있어야 뒤집힐 때
+   납작하게 찌그러지지 않고 입체로 돌아갑니다. */
+.gate-tile{position:relative;width:46px;height:54px;margin-left:-1px;
+  perspective:620px;transition:transform .22s ease}
+.gate-tile:first-child{margin-left:0}
+
+.gate-face{position:absolute;inset:0;display:grid;place-items:center;
+  border:1.5px solid var(--rule);backface-visibility:hidden;
+  transition:transform .5s cubic-bezier(.62,.03,.3,1);
+  font-family:var(--font-text);font-size:18px;font-weight:700;color:var(--ink)}
+.gate-front{background:var(--theme)}
+.gate-back{background:var(--gold);transform:rotateY(180deg)}
+
+/* 타일 구석의 작은 숫자 — 진짜 스크래블 타일에 있는 점수입니다.
+   기능은 없고, 이게 게임 타일이라는 것만 말해줍니다. */
+.gate-pip{position:absolute;right:4px;bottom:2px;font-family:var(--font-mono);
+  font-size:8.5px;font-weight:400;color:var(--ink-soft)}
+
+/* 마우스를 올리면 왼쪽부터 차례로 떠오릅니다. 한꺼번에 뜨면 그냥
+   커진 것처럼 보이는데, 차례로 뜨면 줄지어 선 물건으로 읽힙니다. */
+.gate:hover:not(:disabled) .gate-tile{transform:translateY(-5px)}
+.gate:hover:not(:disabled) .gate-tile:nth-child(2){transition-delay:.04s}
+.gate:hover:not(:disabled) .gate-tile:nth-child(3){transition-delay:.08s}
+.gate:hover:not(:disabled) .gate-tile:nth-child(4){transition-delay:.12s}
+.gate:hover:not(:disabled) .gate-tile:nth-child(5){transition-delay:.16s}
+.gate:active:not(:disabled) .gate-tile{transform:translateY(0);transition-delay:0s}
+
+/* 보내놓고 대답을 기다리는 동안 — 타일이 제자리에서 옅게 숨쉽니다.
+   여기서 금색으로 뒤집지 않는 이유: 뒤집힌 금색은 "정말 시작됐다"는
+   뜻입니다. 미리 뒤집으면 시작된 줄 알았다가 거절당했을 때 되돌려야
+   하고, 그 순간 화면이 거짓말을 한 셈이 됩니다. */
+.gate.is-waiting .gate-front{animation:gate-wait 1.4s ease-in-out infinite}
+.gate.is-waiting .gate-tile:nth-child(2) .gate-front{animation-delay:.12s}
+.gate.is-waiting .gate-tile:nth-child(3) .gate-front{animation-delay:.24s}
+.gate.is-waiting .gate-tile:nth-child(4) .gate-front{animation-delay:.36s}
+.gate.is-waiting .gate-tile:nth-child(5) .gate-front{animation-delay:.48s}
+@keyframes gate-wait{50%{background:var(--theme-tint)}}
+
+/* 누른 뒤 — 왼쪽부터 0.1초 간격으로 뒤집히고, 뒤집힌 면은 금색입니다. */
+.gate.is-going{background:var(--gold-tint);box-shadow:inset 0 0 0 1.5px var(--gold-deep)}
+.gate.is-going .gate-front{transform:rotateY(180deg)}
+.gate.is-going .gate-back{transform:rotateY(360deg)}
+.gate.is-going .gate-tile:nth-child(2) .gate-face{transition-delay:.1s}
+.gate.is-going .gate-tile:nth-child(3) .gate-face{transition-delay:.2s}
+.gate.is-going .gate-tile:nth-child(4) .gate-face{transition-delay:.3s}
+.gate.is-going .gate-tile:nth-child(5) .gate-face{transition-delay:.4s}
+
+/* 문이 다 열리면 대기실이 위로 떠오르며 사라집니다. */
+.lobby.is-opening{animation:gate-open .5s cubic-bezier(.5,0,.75,0) forwards}
+@keyframes gate-open{to{opacity:0;transform:translateY(-16px) scale(1.03)}}
+
+/* 기다리는 쪽 — 방장이 열어주기를 기다립니다. 버튼을 보여주고
+   눌러도 안 되게 막는 대신, 아예 다른 것을 보여줍니다.
+   눌리지 않는 버튼은 고장 난 것처럼 보이기 때문입니다. */
+.await{padding:22px 14px;text-align:center;background:var(--theme-tint);border:1.5px solid var(--rule)}
+.await .hint{margin:0;justify-content:center}
+.await-tiles{display:flex;justify-content:center;margin:0 0 12px}
+.await-tile{width:26px;height:30px;margin-left:-1px;display:grid;place-items:center;
+  background:var(--theme);border:1px solid var(--grid);
+  font-family:var(--font-display);font-size:12px;font-weight:700;color:var(--ink-soft);
+  animation:await-pulse 1.8s ease-in-out infinite}
+.await-tile:first-child{margin-left:0}
+.await-tile:nth-child(2){animation-delay:.15s}
+.await-tile:nth-child(3){animation-delay:.3s}
+.await-tile:nth-child(4){animation-delay:.45s}
+@keyframes await-pulse{0%,60%,100%{background:var(--theme)}30%{background:var(--gold)}}
+
+/* ── 게임 화면 (/game) ───────────────────────────────────
+   아직 게임판은 없습니다. 지금은 "정말 시작됐다"는 것과 누구
+   차례인지만 보여주는 껍데기입니다. 없는 것을 그려두면 되는
+   것처럼 보이므로, 없는 것은 없다고 적어둡니다. */
+.stage{max-width:520px;margin:0 auto;background:var(--paper-2);border:1.5px solid var(--rule);
+  animation:stage-in .5s cubic-bezier(.2,.7,.3,1) both}
+@keyframes stage-in{from{opacity:0;transform:translateY(18px)}}
+
+.stage-crown{padding:26px;border-bottom:1.5px solid var(--rule);text-align:center;background:var(--gold-tint)}
+.stage-crown .tile{background:var(--gold)}
+.stage-crown h1{margin:0;font-family:var(--font-mono);font-size:11px;font-weight:400;
+  letter-spacing:var(--track-caps);text-transform:uppercase;color:var(--gold-deep)}
+.stage-body{padding:24px 26px}
+
+/* 누구 차례인지 — 백엔드가 정해서 알려준 값입니다.
+   양쪽 브라우저가 각자 정하면 서로 자기 차례라고 생각하게 됩니다. */
+.turn{display:flex;align-items:center;justify-content:center;gap:9px;
+  margin:0 0 16px;padding:12px;background:var(--gold-tint);border:1.5px solid var(--rule)}
+.turn-tile{width:30px;height:34px;flex:none;display:grid;place-items:center;
+  background:var(--gold);border:1.5px solid var(--rule);
+  font-family:var(--font-display);font-size:15px;font-weight:700}
+.turn b{font-weight:600}
+.turn.is-me{background:var(--ok-tint)}
+.turn.is-me .turn-tile{background:var(--ok);color:#fff}
+
+.stage-foot{display:flex;gap:0;margin-top:18px}
+.stage-foot .btn-cancel{flex:1;margin-left:-1px;height:40px}
+.stage-foot .btn-cancel:first-child{margin-left:0}
+
+/* ── 알림 한 줄 (대기실 맨 위) ───────────────────────────
+   주소창에 /game 을 직접 쳐서 들어온 것처럼, 단계와 상관없이
+   알려야 할 일이 있을 때 씁니다. */
+.note{display:flex;align-items:center;gap:8px;margin:0;padding:12px 26px;
+  background:var(--bad-tint);border-bottom:1.5px solid var(--rule);font-size:12.5px;color:var(--ink)}
+.note-icon{flex:none;width:18px;height:18px;display:grid;place-items:center;background:var(--bad);
+  font-family:var(--font-display);font-size:11px;font-weight:700;color:#fff}
+
+/* 움직임을 줄여달라고 설정한 사람에게는 뒤집기와 떠오름을 없앱니다.
+   연출은 거들 뿐이라, 없어도 기능은 그대로 동작해야 합니다. */
+@media (prefers-reduced-motion:reduce){
+  .gate-tile,.gate-face,.lobby.is-opening,.stage,.await-tile,
+  .gate.is-waiting .gate-front{animation:none;transition:none}
+  .gate:hover:not(:disabled) .gate-tile{transform:none}
+}
