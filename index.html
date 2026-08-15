@@ -1522,7 +1522,8 @@
           snd.setAttribute('aria-pressed', Sfx.on(!Sfx.on()) ? 'true' : 'false');
         });
 
-        board = Board.mount('#boardBox');
+        // 판의 생김새(배수 칸 자리·이름·크기)도 백엔드가 준 것을 씁니다.
+        board = Board.mount('#boardBox', gameSetup);
         board.setPoints(tilePoints);
         board.setBoard(s.board);
 

@@ -30,15 +30,18 @@ window.Guide = (function () {
     return e;
   }
 
-  /* 배수 칸 설명. 백엔드가 준 이름(premium_legend)을 그대로 씁니다. */
+  /* 배수 칸 설명. 자리도 이름도 배수도 전부 백엔드가 준
+     premium_legend 를 씁니다. 견본에 적히는 글자("3배 / 단어")도
+     여기에 적어두지 않고 배수·대상에서 만들어 냅니다 — 판에 그리는
+     방식과 같아야 설명서와 판이 어긋나지 않습니다. */
   function keys(legend) {
     // 화면에 쓰는 순서. 센 것부터 놓아야 "무엇이 더 좋은지"가 읽힙니다.
     var order = [
-      { k: 'TW', cls: 'tw', face: '3배\n단어' },
-      { k: 'DW', cls: 'dw', face: '2배\n단어' },
-      { k: 'TL', cls: 'tl', face: '3배\n글자' },
-      { k: 'DL', cls: 'dl', face: '2배\n글자' },
-      { k: 'ST', cls: 'st', face: '★' }
+      { k: 'TW', cls: 'tw' },
+      { k: 'DW', cls: 'dw' },
+      { k: 'TL', cls: 'tl' },
+      { k: 'DL', cls: 'dl' },
+      { k: 'ST', cls: 'st', star: true }
     ];
     var box = el('div', 'guide-keys');
     order.forEach(function (o) {
@@ -46,7 +49,9 @@ window.Guide = (function () {
       if (!info) return;          // 백엔드에 없는 칸은 그리지 않습니다
       var row = el('div', 'gkey ' + o.cls);
       var tile = el('i');
-      tile.textContent = o.face;
+      tile.textContent = o.star ? '★'
+        : info.multiplier + '배\n' +
+          (info.applies_to === 'word' ? '단어' : info.applies_to === 'letter' ? '글자' : '');
       tile.style.whiteSpace = 'pre-line';
       row.appendChild(tile);
       row.appendChild(el('span', null, info.name));

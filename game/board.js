@@ -6,12 +6,19 @@
      <link rel="stylesheet" href="game/board.css" />
      <script src="game/board.js"></script>
 
-     var 판 = Board.mount('#boardBox');
+     var 판 = Board.mount('#boardBox', setup);   // setup = GET /api/game/setup
      ...
      판.destroy();
 
    ── 이 파일이 하지 않는 일 ───────────────────────────────
-   서버를 부르지 않습니다. 받은 것을 그리기만 합니다.
+   서버를 부르지 않고, 판의 생김새를 스스로 알지도 못합니다.
+   받은 것을 그리기만 합니다.
+
+   배수 칸이 어디에 있는지(board), 그 칸을 뭐라고 부르는지
+   (premium_legend), 한가운데가 어디인지(center), 판이 몇 칸인지
+   (board_size) — 전부 백엔드가 /api/game/setup 으로 알려줍니다.
+   여기에 베껴 적어두면 백엔드가 판을 바꾸는 날 두 곳이 갈라지고,
+   그때 점수 계산은 백엔드 것을 따르는데 화면만 옛 판을 보여줍니다.
 
    판에 놓인 글자는 **언제나 서버가 준 것**입니다(명세). 내가 방금
    놓은 글자도 내가 그리지 않고, board_updated 로 되돌아온 판을
@@ -25,94 +32,103 @@
 window.Board = (function () {
   'use strict';
 
-  /* ── 판의 생김새 ───────────────────────────────────────
-     표준 스크래블 판(15 × 15)의 배수 칸 자리입니다. 자리는 바꾸지
-     않았습니다 — 스크래블을 아는 사람이 판을 보자마자 알아볼 수
-     있어야 하고, 점수 계산도 이 자리를 기준으로 하기 때문입니다.
+  /* 배수 칸의 색. 백엔드가 쓰는 이름(TW·DW·TL·DL)을 화면의 색에
+     이어 붙이는 표입니다. 자리는 백엔드가 정하고, 여기서는 "그 종류를
+     무슨 색으로 칠할지"만 정합니다.
 
-       T  단어 3배     t  글자 3배
-       D  단어 2배     d  글자 2배
-       *  한가운데 (첫 단어가 지나야 하는 칸)
-       .  아무것도 아닌 칸
+     모르는 종류가 오면 색 없이 이름만 적습니다. 백엔드가 새 칸을
+     추가해도 화면이 깨지지 않고, 대신 색이 없어서 눈에 띕니다 —
+     "여기 색을 정해야 한다"가 바로 보입니다. */
+  var TINT = { TW: 'is-tw', DW: 'is-dw', TL: 'is-tl', DL: 'is-dl' };
 
-     칸 이름(단어 3배 등)은 백엔드가 /api/game/setup 의 premium_legend
-     로 알려주는 말과 똑같이 씁니다. 화면마다 다른 말을 쓰면 같은 칸을
-     두 가지로 부르게 됩니다.
-
-     글자표로 적어둔 이유: 좌표 목록으로 적으면 눈으로 확인할 수가
-     없습니다. 이렇게 두면 판을 위에서 내려다본 모양 그대로라,
-     좌우·위아래가 대칭인지 바로 보입니다. */
-  var LAYOUT = [
-    'T..d...T...d..T',
-    '.D...t...t...D.',
-    '..D...d.d...D..',
-    'd..D...d...D..d',
-    '....D.....D....',
-    '.t...t...t...t.',
-    '..d...d.d...d..',
-    'T..d...*...d..T',
-    '..d...d.d...d..',
-    '.t...t...t...t.',
-    '....D.....D....',
-    'd..D...d...D..d',
-    '..D...d.d...D..',
-    '.D...t...t...D.',
-    'T..d...T...d..T'
-  ];
-
-  // 칸에 무엇이라고 써넣을지.
-  //   x = 몇 배인지, y = 무엇이 몇 배인지, cls = 색
-  var KIND = {
-    'T': { cls: 'is-tw',   x: '3배', y: '단어', label: '단어 3배' },
-    'D': { cls: 'is-dw',   x: '2배', y: '단어', label: '단어 2배' },
-    't': { cls: 'is-tl',   x: '3배', y: '글자', label: '글자 3배' },
-    'd': { cls: 'is-dl',   x: '2배', y: '글자', label: '글자 2배' },
-    '*': { cls: 'is-star', star: true,          label: '한가운데 — 첫 단어는 여기를 지나갑니다' }
-  };
-
-  function mount(target) {
+  function mount(target, setup) {
     var host = typeof target === 'string' ? document.querySelector(target) : target;
     if (!host) throw new Error('Board.mount: 붙일 자리를 찾지 못했습니다 — ' + target);
 
     var wrap = document.createElement('div');
     wrap.className = 'board-wrap';
 
+    // 규칙을 못 받았으면 판을 그리지 않습니다. 우리가 아는 판을 대신
+    // 그려두면, 백엔드가 쓰는 판과 다를 때 그 사실을 아무도 모릅니다.
+    // 없는 것은 없다고 말하는 편이 낫습니다.
+    if (!setup || !setup.board || !setup.board.length) {
+      var oops = document.createElement('p');
+      oops.className = 'board-none';
+      oops.textContent = '게임 규칙을 받아오지 못해 판을 그릴 수 없습니다';
+      wrap.appendChild(oops);
+      host.appendChild(wrap);
+      return {
+        setPoints: function () { return this; },
+        setBoard: function () { return this; },
+        setDraft: function () { return this; },
+        flash: function () { return this; },
+        isEmpty: function () { return false; },
+        cellAtPoint: function () { return null; },
+        hover: function () { return this; },
+        grid: null,
+        destroy: function () {
+          if (wrap.parentNode) wrap.parentNode.removeChild(wrap);
+          return null;
+        },
+        el: wrap
+      };
+    }
+
+    var legend = setup.premium_legend || {};
+    var N = setup.board_size || setup.board.length;
+    var mid = setup.center || [];
+
     var frame = document.createElement('div');
     frame.className = 'board-frame';
 
     var grid = document.createElement('div');
     grid.className = 'board-grid';
+    // 칸 수도 백엔드가 정합니다. CSS 에 15 를 박아두면 판이 바뀌는 날
+    // 격자만 옛 크기로 남습니다.
+    grid.style.gridTemplateColumns = 'repeat(' + N + ',1fr)';
     // 눈으로 보면 격자지만, 화면을 읽어주는 프로그램에게는 표입니다.
     grid.setAttribute('role', 'grid');
-    grid.setAttribute('aria-label', '스크래블 게임판, 가로 15칸 세로 15칸');
+    grid.setAttribute('aria-label', '스크래블 게임판, 가로 ' + N + '칸 세로 ' + N + '칸');
 
     // innerHTML 로 문자열을 이어 붙이지 않고 하나씩 만들어 넣습니다.
-    // 225칸이라 문자열로 만들면 어디가 틀렸는지 찾기 어렵습니다.
-    for (var r = 0; r < 15; r++) {
-      var row = LAYOUT[r];
+    // 칸이 수백 개라 문자열로 만들면 어디가 틀렸는지 찾기 어렵습니다.
+    for (var r = 0; r < N; r++) {
+      var row = setup.board[r] || [];
 
       // 판이 틀어진 채로 조용히 그려지는 것보다, 바로 알려주는 편이
-      // 낫습니다. 한 줄이라도 15칸이 아니면 점수 계산이 다 어긋납니다.
-      if (row.length !== 15) {
-        throw new Error('Board: ' + (r + 1) + '번째 줄이 15칸이 아닙니다 (' + row.length + '칸)');
+      // 낫습니다. 한 줄이라도 칸 수가 다르면 점수 계산이 다 어긋납니다.
+      if (row.length !== N) {
+        throw new Error('Board: 백엔드가 준 판의 ' + (r + 1) + '번째 줄이 ' +
+                        N + '칸이 아닙니다 (' + row.length + '칸)');
       }
 
-      for (var c = 0; c < 15; c++) {
-        var kind = KIND[row.charAt(c)];
+      for (var c = 0; c < N; c++) {
+        var key = row[c] || '';
+        var info = legend[key];
+        var star = (mid[0] === r && mid[1] === c);
 
         var sq = document.createElement('div');
-        sq.className = 'sq' + (kind ? ' ' + kind.cls : '');
+        sq.className = 'sq' +
+          (star ? ' is-star' : key ? ' ' + (TINT[key] || 'is-other') : '');
         sq.setAttribute('role', 'gridcell');
-        // 사람이 부르는 방식(A1 ~ O15)으로 자리를 적어둡니다.
-        var at = 'ABCDEFGHIJKLMNO'.charAt(c) + (r + 1);
-        sq.setAttribute('aria-label', at + (kind ? ', ' + kind.label : ''));
-        sq.dataset.at = at;
 
-        if (kind && kind.star) {
+        // 사람이 부르는 방식(A1 ~ O15)으로 자리를 적어둡니다.
+        var name = colName(c) + (r + 1);
+        sq.setAttribute('aria-label', name +
+          (star ? ', 한가운데 — 첫 단어는 여기를 지나갑니다'
+                : info ? ', ' + info.name : ''));
+        sq.dataset.at = name;
+
+        if (star) {
           sq.textContent = '★';
-        } else if (kind) {
-          sq.appendChild(el('span', 'sq-x', kind.x));
-          sq.appendChild(el('span', 'sq-y', kind.y));
+        } else if (info) {
+          // "3배 / 단어" 두 줄. 백엔드가 준 배수와 대상으로 만듭니다.
+          sq.appendChild(el('span', 'sq-x', info.multiplier + '배'));
+          sq.appendChild(el('span', 'sq-y',
+            info.applies_to === 'word' ? '단어' : info.applies_to === 'letter' ? '글자' : ''));
+        } else if (key) {
+          // 모르는 종류 — 이름을 그대로 적어둡니다.
+          sq.appendChild(el('span', 'sq-x', key));
         }
 
         grid.appendChild(sq);
@@ -127,7 +143,7 @@ window.Board = (function () {
     // 이름을 sqAt 으로 둔 이유: 위 반복문 안에 `var at = 'A1'…` 이
     // 있는데, var 는 함수 전체에 걸치는 이름이라 at 이라고 지으면
     // 그 문자열이 이 함수를 덮어씁니다.
-    function sqAt(r, c) { return grid.children[r * 15 + c]; }
+    function sqAt(r, c) { return grid.children[r * N + c]; }
 
     // 칸에 글자를 올리거나 내립니다.
     //   kind : 'fixed' 서버가 준 글자(못 움직임)
@@ -164,13 +180,13 @@ window.Board = (function () {
       /* 글자별 점수표. 칩에 찍히는 숫자입니다. */
       setPoints: function (p) { points = p; return this; },
 
-      /* 서버가 준 판 전체를 그립니다. 15줄 × 15칸, 빈 칸은 "".
+      /* 서버가 준 판 전체를 그립니다. board_size 만큼, 빈 칸은 "".
          바뀐 부분만 받지 않고 통째로 받는 이유는 명세에 적혀 있습니다 —
          조각을 모아 맞추다 한 번이라도 놓치면 그 뒤로 계속 어긋납니다. */
       setBoard: function (rows) {
         fixed = rows || null;
-        for (var r = 0; r < 15; r++) {
-          for (var c = 0; c < 15; c++) {
+        for (var r = 0; r < N; r++) {
+          for (var c = 0; c < N; c++) {
             var ch = rows && rows[r] && rows[r][c] ? rows[r][c] : '';
             put(sqAt(r, c), ch, ch ? 'fixed' : null, points);
           }
@@ -207,7 +223,7 @@ window.Board = (function () {
 
       /* 그 칸이 비어 있는지. 서버 글자도 초안도 없어야 빈 칸입니다. */
       isEmpty: function (r, c) {
-        if (r < 0 || r > 14 || c < 0 || c > 14) return false;
+        if (r < 0 || r >= N || c < 0 || c >= N) return false;
         if (fixed && fixed[r] && fixed[r][c]) return false;
         var sq = sqAt(r, c);
         return !!sq && !sq.classList.contains('has-chip');
@@ -220,7 +236,7 @@ window.Board = (function () {
         if (!sq || !grid.contains(sq)) return null;
         var i = [].indexOf.call(grid.children, sq);
         if (i < 0) return null;
-        return { row: Math.floor(i / 15), col: i % 15, el: sq };
+        return { row: Math.floor(i / N), col: i % N, el: sq };
       },
 
       /* 어느 칸에 손이 올라가 있는지 표시합니다. */
@@ -243,6 +259,13 @@ window.Board = (function () {
       },
       el: wrap
     };
+  }
+
+  /* 칸 이름 (A1 ~ O15). 판이 26칸을 넘어가면 AA 처럼 두 글자가 됩니다. */
+  function colName(c) {
+    var L = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ', out = '';
+    do { out = L.charAt(c % 26) + out; c = Math.floor(c / 26) - 1; } while (c >= 0);
+    return out;
   }
 
   function el(tag, cls, text) {

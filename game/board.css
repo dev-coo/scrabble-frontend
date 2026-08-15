@@ -57,7 +57,8 @@
    칸마다 테두리를 그리는 것보다 선이 고르게 나옵니다. */
 .board-grid{
   display:grid;
-  grid-template-columns:repeat(15,1fr);
+  /* 몇 칸인지는 board.js 가 백엔드 값(board_size)으로 정해 넣습니다.
+     여기에 15 를 박아두면 판이 바뀌는 날 격자만 옛 크기로 남습니다. */
   aspect-ratio:1;
   gap:1px;
   background:var(--bd-grid);
@@ -84,6 +85,13 @@
   user-select:none;
 }
 
+/* 판을 못 그릴 때 */
+.board-none{
+  margin:0; padding:34px 18px; text-align:center;
+  background:var(--bd-paper); border:1.5px dashed var(--bd-grid);
+  font-size:13px; color:var(--bd-ink); opacity:.75;
+}
+
 /* 배수 칸. 안쪽에 옅은 테를 하나 둘러 종이에 찍힌 것처럼 보이게 합니다. */
 .sq.is-tw,.sq.is-dw,.sq.is-tl,.sq.is-dl,.sq.is-star{
   box-shadow:inset 0 0 0 1px rgba(255,255,255,.22);
@@ -92,6 +100,8 @@
 .sq.is-dw{ background:var(--sq-dw) }
 .sq.is-tl{ background:var(--sq-tl); color:#F2F8FC }
 .sq.is-dl{ background:var(--sq-dl) }
+/* 백엔드가 새로 만든, 아직 색을 안 정한 칸. 색이 없어서 눈에 띕니다. */
+.sq.is-other{ background:transparent; box-shadow:inset 0 0 0 1.5px var(--bd-rule) }
 
 /* 한가운데 별. 첫 단어는 반드시 여기를 지나야 해서, 판에서 유일하게
    "여기서 시작"이라는 뜻을 가진 칸입니다. 그래서 글자 대신 별을 넣고
