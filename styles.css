@@ -523,3 +523,51 @@ body{margin:0;padding:0;background:var(--paper);color:var(--ink);font-family:var
   .lamp.is-on.l3,.over{animation:none}
   .btn-soft,.btn-put{transition:none}
 }
+
+/* ── 턴이 넘어간 순간을 눈에 띄게 ─────────────────────────
+   소리를 꺼둔 사람도 있고, 다른 곳을 보고 있었을 수도 있습니다.
+   색이 바뀌는 것만으로는 눈이 안 갑니다 — 색은 바뀐 뒤에야
+   알아차리기 때문에, 움직임이 한 번 있어야 합니다. */
+
+/* 행동 줄 전체가 한 번 번쩍합니다. */
+.acts.is-passed{ animation:acts-flash 1.1s ease-out }
+@keyframes acts-flash{
+  0%   { background:var(--gold-tint); box-shadow:0 0 0 0 rgba(217,169,60,.55) }
+  60%  { background:var(--gold-tint) }
+  100% { background:var(--paper-2);   box-shadow:0 0 0 16px rgba(217,169,60,0) }
+}
+/* 방금 켜진 불이 크게 튀어오릅니다. */
+.acts.is-passed .lamp.is-on:last-of-type{ animation:lamp-pop .55s cubic-bezier(.2,1.5,.4,1) }
+@keyframes lamp-pop{ 40%{ transform:scale(1.9) } }
+
+/* 차례가 넘어온 쪽 이름이 한 번 뜁니다. */
+.nb-side.is-moved{ animation:nb-pop .6s cubic-bezier(.2,1.3,.4,1) }
+@keyframes nb-pop{ 35%{ transform:translateY(-5px) } }
+
+/* ── 행동 줄 버튼을 키웁니다 ─────────────────────────────
+   차례 넘기기는 게임 중에 제일 자주 누르게 되는 버튼인데 제일
+   작았습니다. 자주 누르는 것이 커야 합니다. */
+.acts-top{padding:12px}
+.acts-top .btn-soft{
+  height:48px; padding:0 20px;
+  font-size:14.5px; font-weight:700;
+  box-shadow:0 4px 0 var(--grid);
+}
+.acts-top .btn-soft.is-quit{box-shadow:0 4px 0 #D9BCBC}
+.acts-top .btn-soft:active:not(:disabled){transform:translateY(4px);box-shadow:0 0 0 var(--grid)}
+/* 잠긴 버튼은 그림자를 뺍니다. 위의 .acts-top .btn-soft 는 선택자가
+   둘이라 .btn-soft:disabled 와 힘이 같은데 뒤에 있어서 이깁니다.
+   그대로 두면 못 누르는 버튼이 눌릴 것처럼 떠 있습니다. */
+.acts-top .btn-soft:disabled{box-shadow:none}
+
+/* 신호등도 함께 키웁니다. 버튼만 커지면 옆의 불이 더 작아 보입니다. */
+.lamps{padding:8px 14px 8px 11px;gap:8px}
+.lamp{width:16px;height:16px;border-width:2px}
+.lamps-say{font-size:12px;font-weight:600;color:var(--ink)}
+
+@media (max-width:560px){
+  .acts-top .btn-soft{height:46px;padding:0 12px;font-size:13.5px}
+}
+@media (prefers-reduced-motion:reduce){
+  .acts.is-passed,.acts.is-passed .lamp.is-on:last-of-type,.nb-side.is-moved{animation:none}
+}

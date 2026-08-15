@@ -222,6 +222,7 @@
       s.board = null; s.myTurn = false; s.submitting = false;
       s.moveNote = null; s.moveBad = false;
       s.rack = null; s.foeTiles = 0; s.bag = null;
+      lastTurnSide = null;   // 다음 판은 처음부터 다시 셉니다
       gameBuilt = false;
     }
 
@@ -573,6 +574,7 @@
         s.confirming = false;
         s.moveNote = null;   // 지난 판의 안내를 지웁니다
         s.moveBad = false;
+        lastTurnSide = null;
 
         // 점수판에서 내가 host 쪽인지 guest 쪽인지.
         // 친구 모드는 방을 만들었는지로 확실히 압니다. 랜덤 매칭은
@@ -637,6 +639,9 @@
         // 줄수록 음이 낮아집니다.
         Sfx.ding(s.passLeft);
         render();
+        // 넘어간 그 순간을 눈으로도 알립니다. 소리를 꺼둔 사람도 있고,
+        // 다른 곳을 보고 있었을 수도 있습니다.
+        flashPass();
         return true;
       }
 
@@ -1578,8 +1583,10 @@
             '<div class="lamps" id="lamps" title="세 번 연속 넘기면 게임이 끝나요">' +
               lamps +
               '<span class="lamps-say">' +
-                (s.passes === 0 ? '넘기기 3번이면 끝'
-                                : s.passLeft + '번 더 넘기면 끝') +
+                // 0번 남았다는 말은 이상합니다. 끝난 것이니 끝났다고 씁니다.
+                (s.passLeft <= 0 ? '세 번 연속 — 끝났어요'
+                 : s.passes === 0 ? '세 번 연속 넘기면 끝나요'
+                 : s.passLeft + '번 더 넘기면 끝나요') +
               '</span>' +
             '</div>' +
             '<button class="btn-soft" id="passBtn" type="button">차례 넘기기</button>' +
@@ -1650,6 +1657,18 @@
       });
 
       quit.addEventListener('click', askQuit);
+    }
+
+    // 넘어간 순간의 신호. 행동 줄이 한 번 번쩍하고, 방금 켜진 불이
+    // 크게 튀어오릅니다. 애니메이션이 끝나면 표시를 지웁니다 —
+    // 남겨두면 다음 번에 다시 붙일 수 없습니다.
+    function flashPass() {
+      var acts = document.querySelector('.acts');
+      if (!acts) return;
+      acts.classList.remove('is-passed');
+      void acts.offsetWidth;          // 브라우저가 한 번 갱신해야 다시 붙습니다
+      acts.classList.add('is-passed');
+      later(function () { acts.classList.remove('is-passed'); }, 1400);
     }
 
     // ── ① 나가기 ───────────────────────────────────────
@@ -1823,6 +1842,9 @@
         '</div>';
     }
 
+    // 직전에 누구 차례였는지. 바뀌는 순간을 잡으려고 들고 있습니다.
+    var lastTurnSide = null;
+
     // ── 상단 이름 바 ───────────────────────────────────
     // 두 사람의 이름을 양끝에 두고 가운데를 비워둡니다.
     //
@@ -1841,7 +1863,8 @@
       // 상대 쪽은 그 반대입니다.
       function side(name, role, cls) {
         var turn = s.turn && (cls === 'is-me' ? s.myTurn : !s.myTurn);
-        return '<div class="nb-side ' + cls + (turn ? ' is-turn' : '') + '">' +
+        return '<div class="nb-side ' + cls + (turn ? ' is-turn' : '') +
+                 (turn && moved ? ' is-moved' : '') + '">' +
                  '<span class="nb-tile">' + esc(name.charAt(0)) + '</span>' +
                  '<span class="nb-who">' +
                    '<b class="nb-name">' + esc(name) + '</b>' +
@@ -1849,6 +1872,11 @@
                  '</span>' +
                '</div>';
       }
+
+      // 차례가 바뀌었으면 그쪽 이름이 한 번 뜁니다. 금색으로 바뀌는
+      // 것만으로는 눈이 안 갑니다 — 색은 바뀐 뒤에야 알아차립니다.
+      var moved = (lastTurnSide !== null && lastTurnSide !== s.myTurn);
+      lastTurnSide = s.myTurn;
 
       box.className = 'namebar';
       box.innerHTML =
