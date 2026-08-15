@@ -86,6 +86,53 @@ window.Sfx = (function () {
     o.start(at); o.stop(at + ms + 0.02);
   }
 
+  /* 금관악기 소리 한 음.
+     톱니파(sawtooth)는 배음이 잔뜩 든 거친 소리라 그대로 들으면
+     시끄럽습니다. 여기에 저역통과 필터를 걸고 그 문턱을 처음엔 높게,
+     뒤로 갈수록 낮게 내리면 "훅 불었다가 잦아드는" 나팔이 됩니다.
+     시작을 아주 빠르게 세우는 것도 나팔의 특징입니다. */
+  function brass(c, at, hz, vol, ms, cents) {
+    var o = c.createOscillator(), f = c.createBiquadFilter(), g = c.createGain();
+    o.type = 'sawtooth';
+    o.frequency.setValueAtTime(hz, at);
+    if (cents) o.detune.setValueAtTime(cents, at);
+
+    f.type = 'lowpass';
+    f.Q.value = 0.7;
+    f.frequency.setValueAtTime(hz * 7, at);
+    f.frequency.exponentialRampToValueAtTime(hz * 2.2, at + ms * 0.8);
+
+    g.gain.setValueAtTime(0.0001, at);
+    g.gain.exponentialRampToValueAtTime(vol, at + 0.018);
+    g.gain.setValueAtTime(vol, at + ms * 0.6);
+    g.gain.exponentialRampToValueAtTime(0.0001, at + ms);
+
+    o.connect(f); f.connect(g); g.connect(c.destination);
+    o.start(at); o.stop(at + ms + 0.04);
+  }
+
+  /* 한 음을 두 개로 겹쳐 냅니다. 아주 조금 음을 어긋나게 하면
+     두 사람이 같이 부는 것처럼 두툼해집니다. 완전히 똑같은 음
+     두 개는 그냥 소리만 커집니다. */
+  function brass2(c, at, hz, vol, ms) {
+    brass(c, at, hz, vol, ms, -7);
+    brass(c, at, hz, vol * 0.8, ms, 7);
+  }
+
+  /* 심벌 — 잡음을 높은 쪽만 남기고 천천히 줄입니다.
+     마지막 화음 위에 얹으면 "쨍" 하고 퍼집니다. */
+  function crash(c, at, vol, ms) {
+    var len = Math.floor(c.sampleRate * ms);
+    var buf = c.createBuffer(1, len, c.sampleRate);
+    var d = buf.getChannelData(0);
+    for (var n = 0; n < len; n++) d[n] = (Math.random() * 2 - 1) * Math.pow(1 - n / len, 2.2);
+    var src = c.createBufferSource(); src.buffer = buf;
+    var hp = c.createBiquadFilter(); hp.type = 'highpass'; hp.frequency.value = 5000;
+    var g = c.createGain(); g.gain.value = vol;
+    src.connect(hp); hp.connect(g); g.connect(c.destination);
+    src.start(at);
+  }
+
   var api = {
     /* 배분 — 나무 칩이 나무 받침대에 놓이는 소리. 낮고 둔합니다.
        i 는 몇 번째 장인지. 장마다 음을 조금씩 올립니다 — 일곱 번이
@@ -157,17 +204,44 @@ window.Sfx = (function () {
       knock(c, t, base * 4, 0.05, 0.02, 10);
     },
 
+    /* 빵빠레 — 이겼을 때.
+
+       나팔 팡파르는 리듬이 반입니다. 짧게 세 번 치고 마지막을 길게
+       끄는 "따 따 따 따—" 가 그것입니다. 음만 올라가면 그냥 음계고,
+       이 리듬이 붙어야 축하로 들립니다.
+
+       솔·솔·솔 로 세 번 부르고 도로 뛰어올라 도·미·솔 화음을 길게
+       끕니다. 마지막에 심벌과 반짝임을 얹습니다. */
+    fanfare: function () {
+      var c = ready(); if (!c) return;
+      var t = c.currentTime;
+      var G4 = 391.995, C5 = 523.251, E5 = 659.255, G5 = 783.991, C6 = 1046.502;
+
+      // 따 · 따 · 따 — 짧게 세 번
+      [0, 0.135, 0.27].forEach(function (d) {
+        brass2(c, t + d, G4, 0.11, 0.115);
+        brass(c, t + d, G4 * 2, 0.045, 0.11);   // 한 옥타브 위를 옅게 얹어 밝게
+      });
+
+      // 따— 뛰어올라 길게. 세 음을 겹쳐 화음으로.
+      var at = t + 0.43;
+      brass2(c, at, C5, 0.12, 1.15);
+      brass2(c, at, E5, 0.085, 1.15);
+      brass2(c, at, G5, 0.075, 1.15);
+      brass(c, at, C6, 0.05, 1.1);
+
+      crash(c, at, 0.075, 1.3);
+      // 화음 위에 얹는 반짝임 두 방울
+      tone(c, at + 0.18, 1567.98, 0.035, 0.5, 'sine');
+      tone(c, at + 0.34, 2093.00, 0.028, 0.45, 'sine');
+    },
+
     /* 게임이 끝났을 때. 이긴 쪽과 진 쪽의 소리가 다릅니다. */
     over: function (won) {
       var c = ready(); if (!c) return;
       var t = c.currentTime;
       if (won) {
-        // 올라가는 다섯 음 + 마지막에 길게 남는 화음
-        [523.25, 659.25, 783.99, 1046.5, 1318.5].forEach(function (hz, i) {
-          tone(c, t + i * 0.09, hz, 0.1, 0.22, 'triangle');
-        });
-        tone(c, t + 0.45, 523.25, 0.07, 1.0, 'sine');
-        tone(c, t + 0.45, 783.99, 0.05, 1.0, 'sine');
+        api.fanfare();
       } else {
         // 내려가는 세 음. 낮지만 어둡지 않게 — 한 판 끝난 것뿐입니다.
         [493.88, 415.30, 349.23].forEach(function (hz, i) {
