@@ -158,6 +158,7 @@
       board: null,     // 판 전체 15×15. 언제나 서버가 준 것입니다
       myTurn: false,   // 내 차례인가. 닉네임 비교로 정하면 안 됩니다
       submitting: false,
+      exchanging: false, // 칩을 바꿔달라고 보내두고 대답을 기다리는 중
       confirming: false, // 제출하기를 눌러 확정을 기다리는 중
       moveNote: null,  // 제출 결과 (사전에 없는 단어 등)
       moveBad: false,
@@ -173,7 +174,8 @@
                role: null, phase: null, queue: null, roomError: null,
                playing: false, starting: false, startError: null, turn: null, note: null,
                rack: null, foeTiles: 0, bag: null, board: null, myTurn: false,
-               submitting: false, confirming: false, moveNote: null, moveBad: false,
+               submitting: false, exchanging: false, confirming: false,
+               moveNote: null, moveBad: false,
                scores: null, side: null, passes: 0, passLeft: 3, over: null };
     }
 
@@ -228,7 +230,7 @@
       if (play) { play.stop(); play = null; }
       if (board) board = board.destroy();
       if (rack) rack = rack.destroy();
-      s.board = null; s.myTurn = false; s.submitting = false;
+      s.board = null; s.myTurn = false; s.submitting = false; s.exchanging = false;
       s.moveNote = null; s.moveBad = false;
       s.rack = null; s.foeTiles = 0; s.bag = null;
       lastTurnSide = null;   // 다음 판은 처음부터 다시 셉니다
@@ -581,6 +583,7 @@
         s.passLeft = 3;
         s.over = null;
         s.confirming = false;
+        s.exchanging = false;
         s.moveNote = null;   // 지난 판의 안내를 지웁니다
         s.moveBad = false;
         lastTurnSide = null;
@@ -668,6 +671,7 @@
         if (msg.board && board) board.setBoard(msg.board);
         s.myTurn = false;
         s.submitting = false;
+        s.exchanging = false;
         s.confirming = false;
         if (play) play.accepted();
         later(function () { Sfx.over(msg.you_won === true); }, 260);
@@ -708,6 +712,53 @@
           s.moveBad = true;
           Sfx.nope();
         }
+        render();
+        return true;
+      }
+
+      // 칩을 바꿨습니다. 새 손패는 나에게만 옵니다.
+      if (msg.type === 'exchanged') {
+        s.exchanging = false;
+        if (msg.rack) {
+          s.rack = msg.rack;
+          if (rack) rack.show(msg.rack);
+        }
+        if (typeof msg.tiles_left === 'number') s.bag = msg.tiles_left;
+        if (play) play.accepted();
+        // 새로 뽑은 만큼 소리를 냅니다. 손패가 통째로 바뀐 것을
+        // 눈으로만 알리면 바뀐 줄 모르고 지나갑니다.
+        (msg.drawn || []).forEach(function (_, i) {
+          later(function () { Sfx.clack(i); }, 120 + i * 110);
+        });
+        render();
+        return true;
+      }
+
+      // 누가 칩을 바꿨습니다. 양쪽 모두에게 옵니다. 차례를 쓴 것이라
+      // 넘기기와 똑같이 신호등이 한 칸 켜집니다(명세).
+      if (msg.type === 'tiles_exchanged') {
+        s.turn = msg.turn || null;
+        s.myTurn = !!msg.your_turn;
+        s.passes = msg.passes || 0;
+        s.passLeft = (typeof msg.passes_until_end === 'number') ? msg.passes_until_end : 0;
+        if (msg.scores) s.scores = msg.scores;
+        if (typeof msg.tiles_left === 'number') s.bag = msg.tiles_left;
+        s.submitting = false;
+        s.confirming = false;
+        s.moveNote = (msg.by || '') + ' 님이 칩 ' + (msg.count || 0) + '개를 바꿨어요';
+        s.moveBad = false;
+        Sfx.ding(s.passLeft);
+        render();
+        flashPass();
+        return true;
+      }
+
+      // 바꾸지 못했을 때. 연결은 끊기지 않습니다.
+      if (msg.type === 'error' && s.exchanging) {
+        s.exchanging = false;
+        s.moveNote = msg.message;
+        s.moveBad = true;
+        Sfx.nope();
         render();
         return true;
       }
@@ -1653,6 +1704,7 @@
                  : s.passLeft + '번 더 넘기면 끝나요') +
               '</span>' +
             '</div>' +
+            '<button class="btn-soft" id="swapBtn" type="button">칩 전부 바꾸기</button>' +
             '<button class="btn-soft" id="passBtn" type="button">차례 넘기기</button>' +
             '<button class="btn-soft is-quit" id="quitBtn" type="button">나가기</button>' +
           '</div>' +
@@ -1668,13 +1720,24 @@
         '</div>';
 
       var say = $('moveSay'), undo = $('undoBtn'), put = $('putBtn');
-      var pass = $('passBtn'), quit = $('quitBtn');
+      var pass = $('passBtn'), quit = $('quitBtn'), swap = $('swapBtn');
+      var busy = s.submitting || s.exchanging;
 
-      pass.disabled = done || !s.myTurn || s.submitting;
+      pass.disabled = done || !s.myTurn || busy;
       quit.disabled = done;
-      undo.disabled = done || (!draft.length && !s.confirming) || s.submitting;
-      put.disabled = done || !s.myTurn || s.submitting || draft.length < 1;
+      undo.disabled = done || (!draft.length && !s.confirming) || busy;
+      put.disabled = done || !s.myTurn || busy || draft.length < 1;
       if (s.submitting) put.textContent = '보내는 중…';
+
+      // 가방에 7장보다 적게 남으면 바꿀 수 없습니다. 스크래블의
+      // 규칙이고 서버도 그렇게 막습니다(명세). 눌러보고 거절당하는
+      // 것보다, 왜 못 누르는지 미리 알려주는 편이 낫습니다.
+      var fewLeft = (s.bag != null && s.bag < 7);
+      swap.disabled = done || !s.myTurn || busy || fewLeft;
+      swap.title = fewLeft ? '가방에 칩이 7개보다 적게 남아 바꿀 수 없어요'
+                 : !s.myTurn ? '내 차례에만 바꿀 수 있어요'
+                 : '든 칩을 전부 가방과 바꿔요. 차례가 넘어갑니다';
+      if (s.exchanging) swap.textContent = '바꾸는 중…';
 
       if (done) {
         say.className = 'move-say';
@@ -1720,7 +1783,72 @@
         roomSock.send(JSON.stringify({ type: 'pass' }));
       });
 
+      swap.addEventListener('click', askSwap);
       quit.addEventListener('click', askQuit);
+    }
+
+    // ── 칩 전부 바꾸기 ─────────────────────────────────
+    // 모음이 하나도 없으면 아무 단어도 만들 수 없습니다. 실제 스크래블은
+    // 그럴 때 차례를 써서 손패를 가방과 바꿉니다. 되돌릴 수 없고 차례가
+    // 넘어가는 일이라 한 번 묻습니다.
+    function askSwap() {
+      var veil = document.createElement('div');
+      veil.className = 'guide-veil';
+      veil.innerHTML =
+        '<div class="ask">' +
+          '<p class="ask-head">든 칩을 전부 바꿀까요?</p>' +
+          '<p class="ask-say">지금 든 칩을 가방에 넣고 <b>새로 뽑아요</b>. ' +
+            '판에 올려둔 칩은 받침대로 돌아갑니다. ' +
+            '차례가 넘어가고 신호등도 한 칸 켜져요.</p>' +
+          '<div class="ask-row">' +
+            '<button class="btn-soft" data-q="no" type="button">그냥 둘래요</button>' +
+            '<button class="btn-put" data-q="yes" type="button">바꿀래요</button>' +
+          '</div>' +
+        '</div>';
+      document.body.appendChild(veil);
+
+      function close() {
+        if (veil.parentNode) veil.parentNode.removeChild(veil);
+        document.removeEventListener('keydown', onKey);
+      }
+      function onKey(e) { if (e.key === 'Escape') close(); }
+      veil.addEventListener('click', function (e) {
+        var t = e.target.closest('[data-q]');
+        if (!t) { if (e.target === veil) close(); return; }
+        close();
+        if (t.dataset.q === 'yes') doSwap();
+      });
+      document.addEventListener('keydown', onKey);
+    }
+
+    // 명세: { type:"exchange", tiles:[...] } — 손에 든 글자를 그대로
+    // 적어 보냅니다. 빈 칩은 "?" 입니다. 판에 올려둔 것도 아직 내
+    // 손패라서, 올려둔 칩부터 받침대로 되돌리고 보냅니다.
+    function doSwap() {
+      if (!rack || !s.myTurn || s.submitting || s.exchanging) return;
+      if (!roomSock || roomSock.readyState !== 1) {
+        s.moveNote = '연결이 없어 보내지 못했어요'; s.moveBad = true;
+        render(); return;
+      }
+
+      var tiles = rack.letters();
+      if (!tiles.length) return;
+
+      if (play) play.clear();
+      s.confirming = false;
+      s.exchanging = true;
+      s.moveNote = null; s.moveBad = false;
+      render();
+
+      roomSock.send(JSON.stringify({ type: 'exchange', tiles: tiles }));
+
+      later(function () {
+        if (!s.exchanging) return;
+        s.exchanging = false;
+        s.moveNote = '백엔드가 대답하지 않았어요. 다시 눌러주세요';
+        s.moveBad = true;
+        render();
+      }, 6000);
     }
 
     // 넘어간 순간의 신호. 행동 줄이 한 번 번쩍하고, 방금 켜진 불이
