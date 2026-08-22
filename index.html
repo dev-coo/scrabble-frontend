@@ -159,6 +159,8 @@
       myTurn: false,   // 내 차례인가. 닉네임 비교로 정하면 안 됩니다
       submitting: false,
       exchanging: false, // 칩을 바꿔달라고 보내두고 대답을 기다리는 중
+      restarting: false, // 한 판 더를 눌러두고 대답을 기다리는 중
+      restartError: null,// 다시 시작하지 못한 이유
       confirming: false, // 제출하기를 눌러 확정을 기다리는 중
       moveNote: null,  // 제출 결과 (사전에 없는 단어 등)
       moveBad: false,
@@ -175,6 +177,7 @@
                playing: false, starting: false, startError: null, turn: null, note: null,
                rack: null, foeTiles: 0, bag: null, board: null, myTurn: false,
                submitting: false, exchanging: false, confirming: false,
+               restarting: false, restartError: null,
                moveNote: null, moveBad: false,
                scores: null, side: null, passes: 0, passLeft: 3, over: null };
     }
@@ -231,6 +234,7 @@
       if (board) board = board.destroy();
       if (rack) rack = rack.destroy();
       s.board = null; s.myTurn = false; s.submitting = false; s.exchanging = false;
+      s.restarting = false; s.restartError = null;
       s.moveNote = null; s.moveBad = false;
       s.rack = null; s.foeTiles = 0; s.bag = null;
       lastTurnSide = null;   // 다음 판은 처음부터 다시 셉니다
@@ -584,6 +588,8 @@
         s.over = null;
         s.confirming = false;
         s.exchanging = false;
+        s.restarting = false;
+        s.restartError = null;
         s.moveNote = null;   // 지난 판의 안내를 지웁니다
         s.moveBad = false;
         lastTurnSide = null;
@@ -599,7 +605,18 @@
         // 타일이 통째로 새로 만들어져 연출이 사라집니다. 문이 다 열린
         // 다음에 goTo 가 화면을 바꾸면서 그때 한 번만 그립니다.
         openGate();
-        later(function () { goTo('/game'); }, GATE_MS);
+        later(function () {
+          // 한 판 더 — 게임 화면 뼈대는 이미 서 있습니다. 그런데 판과
+          // 손패를 끼워 넣는 일이 그 뼈대를 세울 때만 일어나서, 두 번째
+          // 판은 지난 판의 글자와 칩을 그대로 이고 시작했습니다.
+          // 누군가 한 수 둔 뒤에야 조용히 바뀌었습니다.
+          if (gameBuilt) {
+            if (play) play.accepted();      // 올려두었던 칩 표시를 걷고
+            if (board) board.setBoard(s.board);  // 빈 판으로
+            if (rack) rack.deal(s.rack);         // 새 칩을 한 장씩
+          }
+          goTo('/game');
+        }, GATE_MS);
         return true;
       }
 
@@ -750,6 +767,16 @@
         Sfx.ding(s.passLeft);
         render();
         flashPass();
+        return true;
+      }
+
+      // 다시 시작하지 못했을 때. 연결은 끊기지 않으므로 끝난 화면을
+      // 그대로 두고 이유만 붙입니다. 다시 누를 수 있습니다.
+      if (msg.type === 'error' && s.restarting) {
+        s.restarting = false;
+        s.restartError = msg.message || '다시 시작하지 못했어요';
+        Sfx.nope();
+        render();
         return true;
       }
 
@@ -1927,17 +1954,36 @@
               '</div>'
             : '') +
           (s.role === 'host'
-            ? '<button class="btn-put" id="againBtn" type="button">한 판 더</button>'
+            ? '<button class="btn-put" id="againBtn" type="button"' +
+                (s.restarting ? ' disabled' : '') + '>' +
+                (s.restarting ? '다시 시작하는 중…' : '한 판 더') +
+              '</button>' +
+              (s.restartError
+                ? '<p class="hint is-bad"><span class="hint-icon">!</span>' +
+                  esc(s.restartError) + '</p>'
+                : '')
             : '<p class="over-wait">방장이 다시 시작하기를 기다리는 중…</p>') +
         '</div>';
 
       if ($('againBtn')) {
         // 명세: 방장이 start 를 다시 보내면 새 게임입니다.
         $('againBtn').addEventListener('click', function () {
-          if (!roomSock || roomSock.readyState !== 1) return;
-          s.over = null;
+          if (!roomSock || roomSock.readyState !== 1 || s.restarting) return;
+          // 끝난 화면을 그대로 둔 채 기다립니다. 여기서 s.over 를 지우면,
+          // 서버가 "못 시작한다"고 답했을 때 아무것도 없는 화면만 남아
+          // 무슨 일이 벌어진 건지 알 수가 없습니다. 새 판이 열리는 것은
+          // game_started 가 오면 그때 확인하고 넘어갑니다.
+          s.restarting = true;
+          s.restartError = null;
           render();
           roomSock.send(JSON.stringify({ type: 'start' }));
+
+          later(function () {
+            if (!s.restarting) return;
+            s.restarting = false;
+            s.restartError = '백엔드가 대답하지 않았어요. 다시 눌러주세요';
+            render();
+          }, 6000);
         });
       }
     }
